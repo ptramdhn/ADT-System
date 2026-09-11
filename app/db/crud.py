@@ -7,6 +7,9 @@ from app.services.profit_service import recalculate_profit_split
 from app.core.config import settings
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # --- SPH CRUD ---
 def get_next_sph_sequence(db: Session, date_obj: datetime = None) -> tuple[int, str]:
@@ -76,6 +79,51 @@ def update_sph_status(db: Session, sph_id: int, status: str) -> SPHRecord:
         record.status = status
         db.commit()
         db.refresh(record)
+    return record
+
+def update_sph(
+    db: Session,
+    sph_id: int,
+    company_name: str,
+    up_name: str,
+    items: list,
+    date_str: str = None,
+    has_warranty: bool = False,
+    warranty_days: int = None
+) -> SPHRecord:
+    record = get_sph_by_id(db, sph_id)
+    if not record:
+        return None
+    
+    total_amount = sum(float(item.get("price", 0)) * float(item.get("qty", 1)) for item in items)
+    
+    record.company_name = company_name.strip()
+    record.up_name = up_name.strip() if up_name else "-"
+    if date_str and date_str.strip():
+        record.date_str = date_str.strip()
+    record.items = items
+    record.total_sph_amount = total_amount
+    record.has_warranty = has_warranty
+    record.warranty_days = warranty_days if has_warranty else None
+
+    # Regenerate PDF so changes appear on PDF preview immediately
+    if record.pdf_filename:
+        pdf_path = os.path.join(settings.PDF_OUTPUT_DIR, record.pdf_filename)
+        try:
+            generate_sph_pdf(
+                dest_path=pdf_path,
+                sph_number=record.sph_number,
+                date_str=record.date_str,
+                company_name=record.company_name,
+                up_name=record.up_name,
+                items=record.items,
+                warranty_days=record.warranty_days if record.has_warranty else None
+            )
+        except Exception as e:
+            logger.warning(f"Failed to regenerate PDF for SPH {record.sph_number}: {e}")
+
+    db.commit()
+    db.refresh(record)
     return record
 
 

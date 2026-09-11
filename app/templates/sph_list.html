@@ -208,6 +208,13 @@
                     <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
                 </a>
 
+                {% if is_admin %}
+                <!-- Edit SPH Button -->
+                <button @click.stop="openEditSPH({{ sph.id }})" class="p-2 sm:p-1.5 rounded-xl sm:rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 flex items-center justify-center text-xs transition-colors shadow-2xs" title="Edit Data SPH">
+                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                </button>
+                {% endif %}
+
                 {% if is_admin and sph.status != 'PO_TURUN' %}
                 <button @click.stop="openConvertToPO({{ sph.id }}, '{{ sph.company_name }}', {{ sph.total_sph_amount }})" class="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xs flex items-center justify-center text-xs transition-colors" title="Eskalasi ke PO">
                     <i data-lucide="check" class="w-3.5 h-3.5"></i>
@@ -307,6 +314,10 @@
                 <div class="flex items-center gap-2">
                     <button type="button" @click="isDetailModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Tutup</button>
                     {% if is_admin %}
+                    <button type="button" @click="isDetailModalOpen = false; openEditSPH(selectedSPH.id)" class="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5" title="Edit SPH">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                        <span>Edit SPH</span>
+                    </button>
                     <template x-if="selectedSPH?.status !== 'PO_TURUN'">
                         <button type="button" @click="isDetailModalOpen = false; openConvertToPO(selectedSPH.id, selectedSPH.company_name, selectedSPH.total_estimated)" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5">
                             <i data-lucide="check" class="w-3.5 h-3.5"></i>
@@ -474,6 +485,90 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL 4: Edit SPH -->
+    <div x-show="isEditModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-2xl w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-base font-extrabold text-slate-900">Edit Surat Penawaran (SPH)</h3>
+                    <span class="text-xs font-mono font-bold text-[#0062ff] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100" x-text="editData.sph_number"></span>
+                </div>
+                <button @click="isEditModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3.5 py-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nama Perusahaan Tujuan *</label>
+                        <input type="text" x-model="editData.company_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] font-semibold" required />
+                    </div>
+                    <div>
+                        <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Ditujukan ke (UP)</label>
+                        <input type="text" x-model="editData.up_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] font-semibold" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Tanggal Surat Penawaran</label>
+                    <input type="text" x-model="editData.date_str" placeholder="Contoh: Jakarta, 11 September 2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] font-semibold" />
+                </div>
+
+                <!-- Items Dynamic List -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-2xs font-bold uppercase text-slate-500">Rincian Barang & Harga Satuan *</label>
+                        <button type="button" @click="addEditItemRow()" class="text-2xs font-bold text-[#0062ff] hover:underline flex items-center gap-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah Baris Barang
+                        </button>
+                    </div>
+                    <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        <template x-for="(item, idx) in editData.items" :key="idx">
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                                <span class="text-2xs font-bold text-slate-400 w-4 text-center" x-text="idx + 1"></span>
+                                <input type="text" x-model="item.description" placeholder="Spesifikasi / nama barang" class="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none font-semibold" required />
+                                <div class="flex items-center gap-1 text-2xs font-mono text-slate-500">
+                                    <span>Rp</span>
+                                    <input type="number" x-model.number="item.price" class="w-24 sm:w-32 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-800 focus:outline-none" required />
+                                </div>
+                                <button type="button" @click="removeEditItemRow(idx)" class="text-slate-400 hover:text-rose-500 p-1 rounded-lg hover:bg-rose-50 transition-colors" :disabled="editData.items.length <= 1" title="Hapus baris barang">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="flex items-center justify-between bg-blue-50/50 p-3 rounded-xl border border-blue-100 text-xs font-bold text-slate-700 mt-2">
+                        <span>Total Nilai Estimasi:</span>
+                        <span class="text-[#0062ff] font-mono text-sm font-extrabold" x-text="calculateEditTotal()"></span>
+                    </div>
+                </div>
+
+                <!-- Warranty -->
+                <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                        <input type="checkbox" x-model="editData.has_warranty" class="rounded text-[#0062ff] focus:ring-0 w-4 h-4" />
+                        <span>Sertakan Garansi Penggantian Barang</span>
+                    </label>
+                    <div x-show="editData.has_warranty" class="flex items-center gap-1.5 text-2xs font-bold font-mono" x-cloak>
+                        <span class="text-slate-500">Durasi:</span>
+                        <input type="number" x-model.number="editData.warranty_days" class="w-14 bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-center text-slate-800 font-bold" />
+                        <span class="text-slate-500">Hari</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isEditModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitEditSPH()" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-xs font-bold transition-all shadow-xs flex items-center gap-1.5" :disabled="isSubmittingEdit">
+                    <span x-show="!isSubmittingEdit" class="flex items-center gap-1.5"><i data-lucide="check" class="w-4 h-4"></i> Simpan Perubahan</span>
+                    <span x-show="isSubmittingEdit" class="flex items-center gap-1.5">
+                        <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        <span>Menyimpan...</span>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -512,6 +607,20 @@
                 items: []
             },
             isUploadingPO: false,
+            // Edit SPH state
+            isEditModalOpen: false,
+            isSubmittingEdit: false,
+            editData: {
+                id: null,
+                sph_number: '',
+                company_name: '',
+                up_name: '',
+                date_str: '',
+                status: '',
+                items: [{ description: '', price: 0 }],
+                has_warranty: false,
+                warranty_days: 14
+            },
             initPage() {
                 const storedPrompt = sessionStorage.getItem('adt_ai_prompt');
                 if (storedPrompt) {
@@ -729,6 +838,87 @@
                     alert('Upload error: ' + e.message);
                 } finally {
                     this.isUploadingPO = false;
+                }
+            },
+            async openEditSPH(sphId) {
+                try {
+                    const res = await fetch('/api/sph/' + sphId + '/detail');
+                    const resData = await res.json();
+                    if (res.ok && resData.data) {
+                        const d = resData.data;
+                        this.editData = {
+                            id: d.id,
+                            sph_number: d.sph_number,
+                            company_name: d.company_name || '',
+                            up_name: d.up_name || '',
+                            date_str: d.date_str || '',
+                            status: d.status,
+                            items: (d.items && d.items.length) ? d.items.map(it => ({ description: it.description, price: Number(it.price) || 0 })) : [{ description: '', price: 0 }],
+                            has_warranty: !!d.has_warranty,
+                            warranty_days: d.warranty_days || 14
+                        };
+                        this.isEditModalOpen = true;
+                        setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+                    } else {
+                        alert('Gagal mengambil data SPH');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            },
+            addEditItemRow() {
+                this.editData.items.push({ description: '', price: 0 });
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            removeEditItemRow(idx) {
+                if (this.editData.items.length > 1) {
+                    this.editData.items.splice(idx, 1);
+                }
+            },
+            calculateEditTotal() {
+                const total = (this.editData.items || []).reduce((acc, it) => acc + (Number(it.price) || 0), 0);
+                return 'Rp ' + total.toLocaleString('id-ID');
+            },
+            async submitEditSPH() {
+                if (!this.editData.company_name.trim()) {
+                    alert('Nama perusahaan tujuan wajib diisi');
+                    return;
+                }
+                if (!this.editData.items || this.editData.items.length === 0) {
+                    alert('Minimal harus ada 1 barang dalam penawaran');
+                    return;
+                }
+                for (const it of this.editData.items) {
+                    if (!it.description.trim()) {
+                        alert('Deskripsi barang tidak boleh kosong');
+                        return;
+                    }
+                }
+
+                this.isSubmittingEdit = true;
+                try {
+                    const res = await fetch('/api/sph/' + this.editData.id + '/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            company_name: this.editData.company_name,
+                            up_name: this.editData.up_name,
+                            date_str: this.editData.date_str,
+                            items: this.editData.items,
+                            has_warranty: this.editData.has_warranty,
+                            warranty_days: this.editData.has_warranty ? Number(this.editData.warranty_days) : null
+                        })
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal menyimpan perubahan SPH');
+
+                    this.isEditModalOpen = false;
+                    alert('SPH ' + this.editData.sph_number + ' berhasil diperbarui!');
+                    window.location.reload();
+                } catch (e) {
+                    alert('Gagal mengupdate SPH: ' + e.message);
+                } finally {
+                    this.isSubmittingEdit = false;
                 }
             },
             async submitPO() {

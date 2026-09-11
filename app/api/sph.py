@@ -34,6 +34,14 @@ class SPHCreateRequest(BaseModel):
     warranty_days: Optional[int] = 30
     uploaded_pdf_filename: Optional[str] = None
 
+class SPHUpdateRequest(BaseModel):
+    company_name: str
+    up_name: Optional[str] = "-"
+    date_str: Optional[str] = None
+    items: List[ItemModel]
+    has_warranty: bool = False
+    warranty_days: Optional[int] = 30
+
 class SPHStatusUpdateRequest(BaseModel):
     status: str
 
@@ -181,3 +189,33 @@ def update_status_endpoint(sph_id: int, req: SPHStatusUpdateRequest, db: Session
     if not record:
         raise HTTPException(status_code=404, detail="SPH tidak ditemukan")
     return {"success": True, "message": "Status berhasil diupdate", "status": record.status}
+
+@router.put("/{sph_id}")
+@router.post("/{sph_id}/update")
+def update_sph_endpoint(sph_id: int, req: SPHUpdateRequest, db: Session = Depends(get_db), _ = Depends(require_admin)):
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Minimal harus ada 1 barang dalam penawaran")
+    
+    items_data = [item.model_dump() for item in req.items]
+    record = crud.update_sph(
+        db=db,
+        sph_id=sph_id,
+        company_name=req.company_name,
+        up_name=req.up_name,
+        items=items_data,
+        date_str=req.date_str,
+        has_warranty=req.has_warranty,
+        warranty_days=req.warranty_days
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="SPH tidak ditemukan")
+        
+    return {
+        "success": True,
+        "message": f"SPH {record.sph_number} berhasil diperbarui",
+        "data": {
+            "id": record.id,
+            "sph_number": record.sph_number,
+            "total_sph_amount": record.total_sph_amount
+        }
+    }

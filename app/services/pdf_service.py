@@ -1,4 +1,4 @@
-﻿import os
+import os
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -54,6 +54,28 @@ def angka_ke_terbilang_hari(n: int) -> str:
         ones_str = " " + units[ones] if ones > 0 else ""
         return f"{n} ({units[tens]} puluh{ones_str})"
     return f"{n}"
+
+def escape_pdf_text(text: str) -> str:
+    if not text:
+        return ""
+    text = str(text)
+    replacements = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\u2300": "Ø",
+        "\u2205": "Ø",
+        "\u00d7": "x",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"'
+    }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    return text
 
 def generate_sph_pdf(dest_path: str, sph_number: str, date_str: str, company_name: str, up_name: str, items: list, warranty_days: int = None):
     os.makedirs(os.path.dirname(os.path.abspath(dest_path)), exist_ok=True)
@@ -197,7 +219,9 @@ def generate_sph_pdf(dest_path: str, sph_number: str, date_str: str, company_nam
     story.append(Spacer(1, 15))
     
     # --- RECIPIENT ---
-    recipient_text = f"Kepada Yth,<br/><b>{company_name}</b><br/>Up : {up_name}"
+    safe_company = escape_pdf_text(company_name)
+    safe_up = escape_pdf_text(up_name)
+    recipient_text = f"Kepada Yth,<br/><b>{safe_company}</b><br/>Up : {safe_up}"
     story.append(Paragraph(recipient_text, style_normal))
     story.append(Spacer(1, 15))
     
@@ -218,7 +242,7 @@ def generate_sph_pdf(dest_path: str, sph_number: str, date_str: str, company_nam
     ]]
     
     for idx, item in enumerate(items, 1):
-        desc = item.get("description", "")
+        desc = escape_pdf_text(item.get("description", ""))
         price = float(item.get("price", 0))
         price_str = f"{price:,.0f}".replace(",", ".")
         table_data.append([

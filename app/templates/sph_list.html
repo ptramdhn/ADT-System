@@ -1,0 +1,765 @@
+{% extends 'base.html' %}
+{% block title %}Surat Penawaran (SPH) | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}Surat Penawaran (SPH){% endblock %}
+{% block header_subtitle %}Kelola draf penawaran harga dan eskalasi otomatis ke Purchase Order (PO){% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="sphApp()" x-init="initPage()">
+    <!-- Quick Entry Command Bar (Admin Only) -->
+    {% if is_admin %}
+    <div id="quick-entry" class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <!-- Mode Switcher Tabs -->
+            <div class="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <button 
+                    type="button" 
+                    @click="entryMode = 'prompt'" 
+                    class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                    :class="entryMode === 'prompt' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-800'"
+                >
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                    <span>Ketik Prompt AI</span>
+                </button>
+                <button 
+                    type="button" 
+                    @click="entryMode = 'upload'" 
+                    class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                    :class="entryMode === 'upload' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-800'"
+                >
+                    <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
+                    <span>Upload PDF SPH</span>
+                </button>
+            </div>
+
+            <button @click="openManualModal()" class="text-3xs sm:text-2xs font-bold text-slate-500 hover:text-slate-800 px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs transition-all flex items-center gap-1">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>+ Form Manual</span>
+            </button>
+        </div>
+
+        <!-- Mode 1: AI Prompt -->
+        <div x-show="entryMode === 'prompt'" class="space-y-3">
+            <div>
+                <textarea 
+                    x-model="aiPrompt" 
+                    rows="2" 
+                    placeholder="Tulis instruksi penawaran (contoh: Tolong buatkan SPH untuk PT Dellifood Sentosa, ditujukan ke UP Bpk. Fikri. Barangnya Sprocket RS40BX1X15T Baut Adjuster harga satuannya Rp 235.000, garansi 14 hari.)"
+                    class="w-full bg-white border border-slate-200 rounded-xl p-3.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0062ff] focus:ring-2 focus:ring-[#0062ff]/10 font-medium resize-none transition-all"
+                    :disabled="isExtracting"
+                ></textarea>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-0.5">
+                <span class="text-3xs sm:text-2xs font-medium text-slate-400">Ekstraksi otomatis untuk nama PT, UP, barang, harga satuan, dan garansi</span>
+                <button 
+                    @click="extractWithAI()" 
+                    class="w-full sm:w-auto px-5 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0" 
+                    :disabled="isExtracting || !aiPrompt.trim()"
+                >
+                    <span x-show="!isExtracting" class="flex items-center gap-1.5"><i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Ekstrak & Tinjau Data</span>
+                    <span x-show="isExtracting" class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        <span>Mengekstrak...</span>
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mode 2: Upload PDF SPH -->
+        <div x-show="entryMode === 'upload'" class="space-y-3" x-cloak>
+            <div class="bg-white p-5 rounded-xl border border-dashed border-slate-300 text-center hover:border-[#0062ff] transition-all">
+                <div class="w-10 h-10 rounded-full bg-blue-50 text-[#0062ff] flex items-center justify-center mx-auto mb-2">
+                    <i data-lucide="file-up" class="w-5 h-5"></i>
+                </div>
+                <h4 class="text-xs font-bold text-slate-800">Unggah Berkas PDF SPH yang Sudah Ada</h4>
+                <p class="text-3xs font-medium text-slate-400 mt-0.5 mb-3">AI akan otomatis membaca isi PDF SPH, mengekstrak nama PT, UP, rincian barang, dan harga</p>
+                
+                <input 
+                    type="file" 
+                    id="sph-file-input"
+                    @change="handleSPHFileUpload($event)" 
+                    accept=".pdf" 
+                    class="hidden" 
+                    :disabled="isUploadingSPH" 
+                />
+
+                <label for="sph-file-input" class="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-xl text-xs font-semibold cursor-pointer transition-all shadow-xs">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                    <span x-show="!isUploadingSPH">Pilih File PDF SPH</span>
+                    <span x-show="isUploadingSPH">Membaca & Mengekstrak PDF...</span>
+                </label>
+
+                <div x-show="isUploadingSPH" class="flex items-center justify-center gap-2 mt-3 text-2xs font-bold text-[#0062ff]" x-cloak>
+                    <span class="w-3.5 h-3.5 border-2 border-[#0062ff]/30 border-t-[#0062ff] rounded-full animate-spin"></span>
+                    <span>AI sedang menganalisis dokumen PDF SPH...</span>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="errorMessage" class="bg-rose-50 border border-rose-200 text-rose-600 px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2" x-cloak>
+            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+            <span x-text="errorMessage"></span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filter Pills & Search (Responsive Overflow) -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            <button @click="statusFilter = 'ALL'" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0" :class="statusFilter === 'ALL' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900 bg-slate-100'">
+                Semua SPH
+            </button>
+            <button @click="statusFilter = 'PENAWARAN'" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0" :class="statusFilter === 'PENAWARAN' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900 bg-slate-100'">
+                Penawaran
+            </button>
+            <button @click="statusFilter = 'PO_TURUN'" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0" :class="statusFilter === 'PO_TURUN' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900 bg-slate-100'">
+                Sudah Turun PO
+            </button>
+        </div>
+
+        <div class="w-full sm:w-64">
+            <input 
+                type="text" 
+                x-model="searchQuery" 
+                placeholder="Cari No. SPH / Klien..." 
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0062ff] font-medium" 
+            />
+        </div>
+    </div>
+
+    <!-- Responsive List of SPH -->
+    <div class="space-y-2">
+        <!-- Desktop Header (Hidden on Mobile) -->
+        <div class="hidden sm:grid grid-cols-12 text-3xs font-bold uppercase tracking-wider text-slate-400 px-4 py-1.5">
+            <div class="col-span-3">No. SPH & Tanggal</div>
+            <div class="col-span-3">Perusahaan & UP</div>
+            <div class="col-span-3">Rincian Barang</div>
+            <div class="col-span-2">Total Estimasi</div>
+            <div class="col-span-1 text-right">Aksi</div>
+        </div>
+
+        {% for sph in sph_list %}
+        <div 
+            class="flex flex-col sm:grid sm:grid-cols-12 items-stretch sm:items-center justify-between gap-3 sm:gap-0 bg-white hover:bg-slate-50 transition-all rounded-2xl sm:rounded-xl p-4 sm:px-4 sm:py-3 border border-slate-200/80 shadow-2xs group cursor-pointer w-full min-w-0 overflow-hidden"
+            x-show="matchesFilter('{{ sph.status }}') && matchesSearch({{ sph.sph_number | tojson }}, {{ sph.company_name | tojson }}, {{ sph.up_name | tojson }})"
+            @click="openDetailModal({{ sph.id }})"
+        >
+            <div class="w-full sm:col-span-3 flex items-center justify-between sm:block min-w-0">
+                <div class="min-w-0">
+                    <div class="font-mono font-bold text-xs text-slate-900 truncate">{{ sph.sph_number }}</div>
+                    <div class="text-2xs text-slate-400 mt-0.5">{{ sph.date_str }}</div>
+                </div>
+                <div class="sm:hidden shrink-0">
+                    {% if sph.status == 'PO_TURUN' %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> PO Turun
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Penawaran
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="w-full sm:col-span-3 min-w-0">
+                <div class="font-bold text-xs text-slate-800 break-words sm:truncate">{{ sph.company_name }}</div>
+                <div class="text-2xs text-slate-400 mt-0.5 break-words sm:truncate">UP: {{ sph.up_name }}</div>
+            </div>
+
+            <div class="w-full sm:col-span-3 sm:pr-2 min-w-0">
+                <div class="space-y-0.5">
+                    {% for it in sph.items %}
+                    <div class="text-2xs text-slate-600 break-words sm:truncate font-medium">
+                        • {{ it.description }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if sph.has_warranty %}
+                <span class="inline-block text-3xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 mt-1 border border-slate-200">
+                    Garansi {{ sph.warranty_days }} Hari
+                </span>
+                {% endif %}
+            </div>
+
+            <div class="w-full sm:col-span-2 flex sm:block items-center justify-between border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 min-w-0">
+                <div>
+                    <div class="text-3xs font-bold uppercase text-slate-400 sm:hidden">Total Estimasi:</div>
+                    <div class="font-mono font-bold text-xs sm:text-sm text-slate-900">
+                        Rp {{ '{:,.0f}'.format(sph.total_sph_amount).replace(',', '.') }}
+                    </div>
+                </div>
+                <div class="hidden sm:block mt-0.5">
+                    {% if sph.status == 'PO_TURUN' %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> PO Turun
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Penawaran
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="w-full sm:col-span-1 text-right flex items-center justify-end gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 min-w-0" @click.stop>
+                <!-- Preview PDF Inline -->
+                <a href="/api/sph/download/{{ sph.id }}" target="_blank" class="p-2 sm:p-1.5 rounded-xl sm:rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center text-xs transition-colors shadow-2xs" title="Lihat PDF SPH (Buka di Tab Baru)">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                </a>
+
+                {% if is_admin and sph.status != 'PO_TURUN' %}
+                <button @click.stop="openConvertToPO({{ sph.id }}, '{{ sph.company_name }}', {{ sph.total_sph_amount }})" class="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xs flex items-center justify-center text-xs transition-colors" title="Eskalasi ke PO">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-slate-50 rounded-xl p-8 text-center text-xs font-semibold text-slate-400 border border-slate-200/60">
+            Belum ada Surat Penawaran (SPH) yang dibuat.
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- MODAL 1: Detail SPH Lengkap (Tanpa Teks Terpotong) -->
+    <div x-show="isDetailModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-2xl w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-start justify-between pb-3 border-b border-slate-100">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-base font-extrabold font-mono text-slate-900" x-text="selectedSPH?.sph_number"></span>
+                        <template x-if="selectedSPH?.status === 'PO_TURUN'">
+                            <span class="text-3xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">PO Turun</span>
+                        </template>
+                        <template x-if="selectedSPH?.status !== 'PO_TURUN'">
+                            <span class="text-3xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Penawaran</span>
+                        </template>
+                    </div>
+                    <p class="text-2xs text-slate-400 font-medium mt-0.5" x-text="selectedSPH?.date_str"></p>
+                </div>
+                <button @click="isDetailModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-4 py-1">
+                <!-- Info Klien & UP -->
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <span class="text-3xs font-bold uppercase text-slate-400 block">Perusahaan Tujuan</span>
+                        <span class="font-bold text-slate-800 text-xs" x-text="selectedSPH?.company_name"></span>
+                    </div>
+                    <div>
+                        <span class="text-3xs font-bold uppercase text-slate-400 block">Ditujukan ke (UP)</span>
+                        <span class="font-bold text-slate-800 text-xs" x-text="selectedSPH?.up_name || '-'"></span>
+                    </div>
+                </div>
+
+                <!-- Complete Items Table (No Truncation) -->
+                <div>
+                    <h4 class="text-2xs font-bold uppercase tracking-wider text-slate-400 mb-2">Rincian Barang Penawaran</h4>
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-3xs font-bold uppercase text-slate-400">
+                                <tr>
+                                    <th class="p-3 w-8 text-center">No</th>
+                                    <th class="p-3">Deskripsi / Spesifikasi Barang</th>
+                                    <th class="p-3 text-right">Harga Satuan</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="(item, idx) in selectedSPH?.items || []" :key="idx">
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-3 text-center font-mono text-slate-400 text-2xs" x-text="idx + 1"></td>
+                                        <td class="p-3 font-semibold text-slate-800 break-words" x-text="item.description"></td>
+                                        <td class="p-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap" x-text="'Rp ' + Number(item.price || 0).toLocaleString('id-ID')"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                            <tfoot class="bg-blue-50/40 border-t border-slate-200 font-bold">
+                                <tr>
+                                    <td colspan="2" class="p-3 text-right text-xs text-slate-700">Total Nilai Estimasi Penawaran:</td>
+                                    <td class="p-3 text-right font-mono text-sm text-[#0062ff]" x-text="'Rp ' + Number(selectedSPH?.total_estimated || 0).toLocaleString('id-ID')"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Warranty Info -->
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
+                    <span class="text-slate-500 font-medium">Ketentuan Garansi:</span>
+                    <template x-if="selectedSPH?.has_warranty">
+                        <span class="font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 font-mono" x-text="'Garansi ' + selectedSPH.warranty_days + ' Hari Kerja'"></span>
+                    </template>
+                    <template x-if="!selectedSPH?.has_warranty">
+                        <span class="font-medium text-slate-400">Tanpa Garansi Tambahan</span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Action Buttons in Detail Modal -->
+            <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+                <a :href="'/api/sph/download/' + selectedSPH?.id" target="_blank" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                    <span>Lihat File PDF (Tab Baru)</span>
+                </a>
+
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="isDetailModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Tutup</button>
+                    {% if is_admin %}
+                    <template x-if="selectedSPH?.status !== 'PO_TURUN'">
+                        <button type="button" @click="isDetailModalOpen = false; openConvertToPO(selectedSPH.id, selectedSPH.company_name, selectedSPH.total_estimated)" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5">
+                            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                            <span>Turunkan ke PO</span>
+                        </button>
+                    </template>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Form SPH Confirmation / Create -->
+    <div x-show="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-2xl w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900">Tinjau & Konfirmasi Surat Penawaran (SPH)</h3>
+                <button @click="isModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nama Perusahaan Tujuan *</label>
+                        <input type="text" x-model="formData.company_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] font-semibold" required />
+                    </div>
+                    <div>
+                        <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Ditujukan ke (UP)</label>
+                        <input type="text" x-model="formData.up_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] font-semibold" />
+                    </div>
+                </div>
+
+                <!-- Items Dynamic List -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-2xs font-bold uppercase text-slate-500">Rincian Barang & Harga Satuan *</label>
+                        <button type="button" @click="addItemRow()" class="text-2xs font-bold text-[#0062ff] hover:underline">
+                            + Tambah Baris
+                        </button>
+                    </div>
+                    <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        <template x-for="(item, idx) in formData.items" :key="idx">
+                            <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                                <span class="text-2xs font-bold text-slate-400 w-4 text-center" x-text="idx + 1"></span>
+                                <input type="text" x-model="item.description" placeholder="Spesifikasi barang" class="flex-1 bg-transparent border-none text-xs text-slate-800 focus:outline-none font-semibold" required />
+                                <div class="flex items-center gap-1 text-2xs font-mono text-slate-500">
+                                    <span>Rp</span>
+                                    <input type="number" x-model.number="item.price" class="w-24 sm:w-28 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-slate-800 focus:outline-none" required />
+                                </div>
+                                <button type="button" @click="removeItemRow(idx)" class="text-slate-400 hover:text-rose-500 p-1" :disabled="formData.items.length <= 1">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="text-right text-xs font-bold text-slate-700 mt-2">
+                        Total Estimasi: <span class="text-[#0062ff] font-mono font-extrabold" x-text="calculateTotalForm()"></span>
+                    </div>
+                </div>
+
+                <!-- Warranty -->
+                <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                        <input type="checkbox" x-model="formData.has_warranty" class="rounded text-[#0062ff] focus:ring-0 w-4 h-4" />
+                        <span>Sertakan Garansi Penggantian Barang</span>
+                    </label>
+                    <div x-show="formData.has_warranty" class="flex items-center gap-1.5 text-2xs font-bold font-mono" x-cloak>
+                        <span class="text-slate-500">Durasi:</span>
+                        <input type="number" x-model.number="formData.warranty_days" class="w-14 bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-center text-slate-800 font-bold" />
+                        <span class="text-slate-500">Hari</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitSPH()" class="px-6 py-2.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-bold transition-all shadow-xs flex items-center gap-1.5" :disabled="isSubmitting">
+                    <span x-show="!isSubmitting">Simpan & Terbitkan PDF</span>
+                    <span x-show="isSubmitting">Memproses...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Convert SPH to PO (Dengan Pilihan Item Barang SPH) -->
+    <div x-show="isPOModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-xl w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900">Konfirmasi Penerimaan PO Klien</h3>
+                <button @click="isPOModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <!-- PDF Upload Zone -->
+                <div class="bg-blue-50/60 p-4 rounded-2xl border border-dashed border-blue-200 text-center">
+                    <div class="flex items-center justify-center gap-1.5 text-[#0062ff] font-bold text-xs mb-0.5">
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                        <span>Upload PDF PO dari Klien</span>
+                    </div>
+                    <p class="text-3xs font-medium text-slate-400 mb-2">Ekstraksi otomatis nomor PO & nilai kontrak</p>
+                    
+                    <input type="file" @change="handlePOFileUpload($event)" accept=".pdf" class="block w-full text-2xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-2xs file:font-bold file:bg-[#0062ff] file:text-white hover:file:bg-[#0052e0] cursor-pointer" :disabled="isUploadingPO" />
+                    
+                    <div x-show="isUploadingPO" class="flex items-center justify-center gap-2 mt-2 text-2xs font-bold text-[#0062ff]" x-cloak>
+                        <span class="w-3 h-3 border-2 border-[#0062ff]/30 border-t-[#0062ff] rounded-full animate-spin"></span>
+                        <span>Membaca PDF PO...</span>
+                    </div>
+
+                    <div x-show="poData.po_pdf_filename" class="text-2xs font-bold text-emerald-600 mt-1.5 truncate" x-cloak>
+                        ✓ <span x-text="poData.po_pdf_filename"></span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nomor PO Klien *</label>
+                        <input type="text" x-model="poData.po_number" placeholder="misal: 6500288236" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                    </div>
+                    <div>
+                        <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nama Perusahaan Klien *</label>
+                        <input type="text" x-model="poData.client_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                    </div>
+                </div>
+
+                <!-- Item Selector for this PO (Cases where SPH has 2 items but PO only orders 1) -->
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Pilih Barang yang Dipesan pada PO Ini</label>
+                    <div class="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-48 overflow-y-auto">
+                        <template x-for="(it, idx) in poData.items" :key="idx">
+                            <div class="bg-white p-2.5 rounded-lg border border-slate-200 text-xs flex items-center justify-between gap-2">
+                                <label class="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                    <input type="checkbox" x-model="it.selected" @change="recalcPOTotalFromItems()" class="rounded text-[#0062ff] focus:ring-0 w-4 h-4" />
+                                    <span class="font-semibold text-slate-800 truncate" x-text="it.description"></span>
+                                </label>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <span class="text-3xs text-slate-400 font-mono">Qty:</span>
+                                    <input type="number" x-model.number="it.qty" @input="recalcPOTotalFromItems()" class="w-12 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-center font-mono font-bold text-xs" />
+                                    <span class="text-3xs text-slate-400 font-mono">@</span>
+                                    <input type="number" x-model.number="it.price" @input="recalcPOTotalFromItems()" class="w-24 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-right font-mono font-bold text-xs" />
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!poData.items || poData.items.length === 0">
+                            <p class="text-3xs text-slate-400">Tidak ada rincian barang spesifik dari SPH. Nominal total akan diisi manual.</p>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nilai Total Kontrak PO (Rp) *</label>
+                    <input type="number" x-model.number="poData.total_po_amount" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Catatan / Syarat Pembayaran</label>
+                    <textarea x-model="poData.notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isPOModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitPO()" class="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-xs font-bold transition-all shadow-xs flex items-center gap-1.5" :disabled="isSubmittingPO">
+                    <span x-show="!isSubmittingPO">Konfirmasi PO Turun</span>
+                    <span x-show="isSubmittingPO">Menyimpan...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function sphApp() {
+        return {
+            entryMode: 'prompt',
+            aiPrompt: '',
+            isExtracting: false,
+            isUploadingSPH: false,
+            errorMessage: '',
+            statusFilter: 'ALL',
+            searchQuery: '',
+            isModalOpen: false,
+            isDetailModalOpen: false,
+            selectedSPH: null,
+            isSubmitting: false,
+            formData: {
+                company_name: '',
+                up_name: '',
+                items: [{ description: '', price: 0 }],
+                has_warranty: false,
+                warranty_days: 14,
+                uploaded_pdf_filename: null
+            },
+            isPOModalOpen: false,
+            isSubmittingPO: false,
+            poData: {
+                sph_id: null,
+                po_number: '',
+                client_name: '',
+                total_po_amount: 0,
+                notes: '',
+                po_pdf_filename: null,
+                items: []
+            },
+            isUploadingPO: false,
+            initPage() {
+                const storedPrompt = sessionStorage.getItem('adt_ai_prompt');
+                if (storedPrompt) {
+                    this.aiPrompt = storedPrompt;
+                    sessionStorage.removeItem('adt_ai_prompt');
+                    this.extractWithAI();
+                }
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+            },
+            matchesFilter(status) {
+                if (this.statusFilter === 'ALL') return true;
+                return status === this.statusFilter;
+            },
+            matchesSearch(no, company, up) {
+                if (!this.searchQuery.trim()) return true;
+                const q = this.searchQuery.toLowerCase();
+                return (no && no.toLowerCase().includes(q)) || 
+                       (company && company.toLowerCase().includes(q)) || 
+                       (up && up.toLowerCase().includes(q));
+            },
+            async openDetailModal(sphId) {
+                try {
+                    const res = await fetch('/api/sph/' + sphId + '/detail');
+                    const resData = await res.json();
+                    if (res.ok) {
+                        this.selectedSPH = resData.data;
+                        this.isDetailModalOpen = true;
+                        setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+                    }
+                } catch (e) {
+                    console.error('Failed to load SPH detail:', e);
+                }
+            },
+            addItemRow() {
+                this.formData.items.push({ description: '', price: 0 });
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            removeItemRow(idx) {
+                if (this.formData.items.length > 1) {
+                    this.formData.items.splice(idx, 1);
+                }
+            },
+            calculateTotalForm() {
+                const total = this.formData.items.reduce((acc, it) => acc + (Number(it.price) || 0), 0);
+                return 'Rp ' + total.toLocaleString('id-ID');
+            },
+            openManualModal() {
+                this.formData = {
+                    company_name: '',
+                    up_name: '',
+                    items: [{ description: '', price: 0 }],
+                    has_warranty: false,
+                    warranty_days: 14,
+                    uploaded_pdf_filename: null
+                };
+                this.isModalOpen = true;
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            async extractWithAI() {
+                if (!this.aiPrompt.trim()) return;
+                this.isExtracting = true;
+                this.errorMessage = '';
+                try {
+                    const res = await fetch('/api/sph/extract-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: this.aiPrompt })
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal mengekstrak prompt');
+                    
+                    const extracted = resData.data;
+                    this.formData.company_name = extracted.company_name || '';
+                    this.formData.up_name = extracted.up_name || '';
+                    this.formData.items = (extracted.items && extracted.items.length) ? extracted.items : [{ description: '', price: 0 }];
+                    this.formData.has_warranty = !!extracted.has_warranty;
+                    this.formData.warranty_days = extracted.warranty_days || 14;
+                    this.formData.uploaded_pdf_filename = null;
+                    
+                    this.isModalOpen = true;
+                    setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+                } catch (e) {
+                    this.errorMessage = e.message;
+                } finally {
+                    this.isExtracting = false;
+                }
+            },
+            async handleSPHFileUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                this.isUploadingSPH = true;
+                this.errorMessage = '';
+
+                const uploadBody = new FormData();
+                uploadBody.append('file', file);
+
+                try {
+                    const res = await fetch('/api/sph/upload-extract', {
+                        method: 'POST',
+                        body: uploadBody
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal memproses file PDF SPH');
+
+                    const d = resData.data;
+                    this.formData.company_name = d.company_name || '';
+                    this.formData.up_name = d.up_name || '';
+                    this.formData.items = (d.items && d.items.length) ? d.items : [{ description: '', price: 0 }];
+                    this.formData.has_warranty = !!d.has_warranty;
+                    this.formData.warranty_days = d.warranty_days || 14;
+                    this.formData.uploaded_pdf_filename = resData.filename;
+
+                    this.isModalOpen = true;
+                    setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+                } catch (e) {
+                    this.errorMessage = 'Upload error: ' + e.message;
+                } finally {
+                    this.isUploadingSPH = false;
+                    event.target.value = '';
+                }
+            },
+            async submitSPH() {
+                if (!this.formData.company_name) {
+                    alert('Nama perusahaan wajib diisi');
+                    return;
+                }
+                this.isSubmitting = true;
+                try {
+                    const res = await fetch('/api/sph/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.formData)
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal membuat SPH');
+                    
+                    window.open('/api/sph/download/' + resData.data.id, '_blank');
+                    window.location.reload();
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmitting = false;
+                }
+            },
+            async openConvertToPO(sphId, companyName, totalAmount) {
+                let itemsList = [];
+                try {
+                    const res = await fetch('/api/sph/' + sphId + '/detail');
+                    const resData = await res.json();
+                    if (res.ok && resData.data && resData.data.items) {
+                        itemsList = resData.data.items.map(it => ({
+                            description: it.description,
+                            price: Number(it.price) || 0,
+                            qty: Number(it.qty) || 1,
+                            selected: true
+                        }));
+                    }
+                } catch (e) {
+                    console.error('Failed to pre-fetch SPH items:', e);
+                }
+
+                this.poData = {
+                    sph_id: sphId,
+                    po_number: '',
+                    client_name: companyName,
+                    total_po_amount: totalAmount,
+                    notes: '',
+                    po_pdf_filename: null,
+                    items: itemsList
+                };
+                this.isPOModalOpen = true;
+                this.recalcPOTotalFromItems();
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            recalcPOTotalFromItems() {
+                if (!this.poData.items || this.poData.items.length === 0) return;
+                const total = this.poData.items
+                    .filter(it => it.selected)
+                    .reduce((sum, it) => sum + ((Number(it.price) || 0) * (Number(it.qty) || 1)), 0);
+                if (total > 0) {
+                    this.poData.total_po_amount = total;
+                }
+            },
+            async handlePOFileUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                this.isUploadingPO = true;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const res = await fetch('/api/po/upload-extract', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal memproses PDF PO');
+                    
+                    this.poData.po_pdf_filename = resData.filename;
+                    const d = resData.data;
+                    if (d.po_number) this.poData.po_number = d.po_number;
+                    if (d.client_name) this.poData.client_name = d.client_name;
+                    if (d.total_po_amount) this.poData.total_po_amount = d.total_po_amount;
+                    if (d.notes) this.poData.notes = d.notes;
+                    if (d.items && d.items.length > 0) {
+                        this.poData.items = d.items.map(it => ({
+                            description: it.description,
+                            price: Number(it.price) || 0,
+                            qty: Number(it.qty) || 1,
+                            selected: true
+                        }));
+                    }
+                } catch (e) {
+                    alert('Upload error: ' + e.message);
+                } finally {
+                    this.isUploadingPO = false;
+                }
+            },
+            async submitPO() {
+                if (!this.poData.po_number) {
+                    alert('Nomor PO wajib diisi');
+                    return;
+                }
+                const selectedItems = (this.poData.items || []).filter(it => it.selected);
+                const payload = {
+                    ...this.poData,
+                    items: selectedItems.length > 0 ? selectedItems : null
+                };
+
+                this.isSubmittingPO = true;
+                try {
+                    const res = await fetch('/api/po/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal membuat PO');
+                    
+                    window.location.href = '/po/' + resData.data.id;
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmittingPO = false;
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}

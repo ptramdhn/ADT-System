@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+{% block title %}Bagi Hasil & Kas | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}Rekapitulasi Laba & Bagi Hasil{% endblock %}
+{% block header_subtitle %}Pantau saldo hak bagi hasil karyawan dan catat pencairan dana/kasbon{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="financialApp()">
+    <!-- Top Action Bar -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50/70 border border-slate-100 rounded-2xl p-4 sm:p-5">
+        <div>
+            <h3 class="text-xs sm:text-sm font-bold text-slate-800">Rekening Saldo Hak Bagi Hasil Karyawan</h3>
+            <p class="text-2xs text-slate-400 mt-0.5">Saldo dihitung dari akumulasi hak bagi hasil proyek dikurangi pencairan uang yang telah ditarik</p>
+        </div>
+        {% if is_admin %}
+        <button @click="openWithdrawalModal()" class="px-4 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+            <i data-lucide="hand-coins" class="w-3.5 h-3.5"></i>
+            <span>Catat Pengambilan Uang</span>
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- 3 Compact Account Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Karyawan 1 Card -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-2xs">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-blue-50 text-[#0062ff] flex items-center justify-center font-bold text-2xs border border-blue-100">
+                            K1
+                        </div>
+                        <h4 class="font-bold text-xs text-slate-800">Akun Karyawan 1</h4>
+                    </div>
+                    <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">Porsi 25%</span>
+                </div>
+
+                <div class="space-y-1.5 text-2xs mt-3 text-slate-500">
+                    <div class="flex justify-between">
+                        <span>Total Hak Bagi Hasil:</span>
+                        <span class="font-mono text-slate-800 font-semibold">Rp {{ '{:,.0f}'.format(balances.k1.earned).replace(',', '.') }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Sudah Diambil / Dicairkan:</span>
+                        <span class="font-mono text-rose-500 font-semibold">Rp {{ '{:,.0f}'.format(balances.k1.withdrawn).replace(',', '.') }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-3xs font-bold uppercase tracking-wider text-slate-400">Sisa Saldo:</span>
+                <span class="text-sm sm:text-base font-bold font-mono text-emerald-600">
+                    Rp {{ '{:,.0f}'.format(balances.k1.balance).replace(',', '.') }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Karyawan 2 Card -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-2xs">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-blue-50 text-[#0062ff] flex items-center justify-center font-bold text-2xs border border-blue-100">
+                            K2
+                        </div>
+                        <h4 class="font-bold text-xs text-slate-800">Akun Karyawan 2</h4>
+                    </div>
+                    <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">Porsi 25%</span>
+                </div>
+
+                <div class="space-y-1.5 text-2xs mt-3 text-slate-500">
+                    <div class="flex justify-between">
+                        <span>Total Hak Bagi Hasil:</span>
+                        <span class="font-mono text-slate-800 font-semibold">Rp {{ '{:,.0f}'.format(balances.k2.earned).replace(',', '.') }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Sudah Diambil / Dicairkan:</span>
+                        <span class="font-mono text-rose-500 font-semibold">Rp {{ '{:,.0f}'.format(balances.k2.withdrawn).replace(',', '.') }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-3xs font-bold uppercase tracking-wider text-slate-400">Sisa Saldo:</span>
+                <span class="text-sm sm:text-base font-bold font-mono text-emerald-600">
+                    Rp {{ '{:,.0f}'.format(balances.k2.balance).replace(',', '.') }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Kas PT ADT Card -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-2xs">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-2xs border border-emerald-100">
+                            ADT
+                        </div>
+                        <h4 class="font-bold text-xs text-slate-800">Kas PT ADT</h4>
+                    </div>
+                    <span class="text-3xs font-mono font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100">Porsi 50%</span>
+                </div>
+
+                <div class="space-y-1.5 text-2xs mt-3 text-slate-500">
+                    <div class="flex justify-between">
+                        <span>Total Laba Bersih:</span>
+                        <span class="font-mono text-slate-800 font-semibold">Rp {{ '{:,.0f}'.format(summary.total_laba_bersih).replace(',', '.') }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Hak Alokasi Kas (50%):</span>
+                        <span class="font-mono text-emerald-600 font-semibold">Rp {{ '{:,.0f}'.format(summary.total_kas).replace(',', '.') }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-3xs font-bold uppercase tracking-wider text-slate-400">Total Kas Terkumpul:</span>
+                <span class="text-sm sm:text-base font-bold font-mono text-emerald-600">
+                    Rp {{ '{:,.0f}'.format(summary.total_kas).replace(',', '.') }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Riwayat Pengambilan Uang Karyawan (Compact & Sleek) -->
+    <div class="space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-800">Riwayat Pengambilan / Pencairan Uang Karyawan</h3>
+        </div>
+
+        <div class="space-y-2">
+            <!-- Header (Desktop Only) -->
+            <div class="hidden sm:grid grid-cols-12 text-3xs font-semibold uppercase tracking-wider text-slate-400 px-4 py-1.5">
+                <div class="col-span-2">Tanggal</div>
+                <div class="col-span-2">Nama Karyawan</div>
+                <div class="col-span-2">Nominal Diambil</div>
+                <div class="col-span-2">Terkait PO</div>
+                <div class="col-span-2">Metode</div>
+                <div class="col-span-2 text-right">Catatan & Aksi</div>
+            </div>
+
+            {% for w in withdrawals %}
+            <div class="flex flex-col sm:grid sm:grid-cols-12 items-stretch sm:items-center justify-between gap-2.5 sm:gap-0 bg-slate-50/70 hover:bg-slate-100 transition-all rounded-2xl sm:rounded-xl p-4 sm:px-4 sm:py-2.5 border border-slate-100 text-xs w-full min-w-0 overflow-hidden">
+                <!-- Mobile Row 1: Tanggal & Karyawan -->
+                <div class="w-full sm:col-span-2 flex items-center justify-between sm:block min-w-0">
+                    <span class="text-2xs font-mono text-slate-500 font-medium">{{ w.withdrawal_date.strftime('%d/%m/%Y') }}</span>
+                    <div class="sm:hidden">
+                        <span class="inline-block text-3xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062ff] border border-blue-100">
+                            {{ w.karyawan_name }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="hidden sm:block sm:col-span-2 min-w-0">
+                    <span class="inline-block text-3xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062ff] border border-blue-100">
+                        {{ w.karyawan_name }}
+                    </span>
+                </div>
+
+                <!-- Nominal Diambil -->
+                <div class="w-full sm:col-span-2 flex sm:block items-center justify-between font-mono font-semibold text-xs text-rose-600 min-w-0 border-t sm:border-t-0 border-slate-200/60 pt-2 sm:pt-0">
+                    <span class="text-3xs font-semibold text-slate-400 font-sans sm:hidden">Nominal:</span>
+                    <span>Rp {{ '{:,.0f}'.format(w.amount).replace(',', '.') }}</span>
+                </div>
+
+                <!-- Terkait PO & Metode -->
+                <div class="w-full sm:col-span-2 flex sm:block items-center justify-between font-mono text-2xs font-medium text-slate-700 min-w-0">
+                    <span class="text-3xs font-semibold text-slate-400 font-sans sm:hidden">Terkait PO:</span>
+                    <div>
+                        {% if w.po %}
+                            <a href="/po/{{ w.po.id }}" class="text-[#0062ff] hover:underline">{{ w.po.po_number }}</a>
+                        {% else %}
+                            <span class="text-slate-400">-</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="w-full sm:col-span-2 flex sm:block items-center justify-between text-2xs text-slate-600 min-w-0">
+                    <span class="text-3xs font-semibold text-slate-400 sm:hidden">Metode:</span>
+                    <span>{{ w.payment_method }}</span>
+                </div>
+
+                <!-- Catatan & Aksi -->
+                <div class="w-full sm:col-span-2 text-right flex items-center justify-between sm:justify-end gap-2 border-t sm:border-t-0 border-slate-200/60 pt-2 sm:pt-0 min-w-0">
+                    <span class="text-2xs text-slate-400 break-words sm:truncate">{{ w.notes or '-' }}</span>
+                    {% if is_admin %}
+                    <button @click="deleteWithdrawal({{ w.id }})" class="p-1.5 rounded-lg bg-white sm:bg-transparent border sm:border-transparent border-slate-200 text-slate-400 hover:text-rose-600 transition-colors shrink-0" title="Hapus">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="bg-slate-50 rounded-xl p-6 text-center text-2xs text-slate-400">
+                Belum ada riwayat pengambilan uang yang dicatat.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal Catat Pengambilan Uang -->
+    <div x-show="isWithdrawalModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs" x-cloak>
+        <div class="bg-white rounded-2xl border border-slate-100 max-w-sm w-full p-5 shadow-2xl space-y-3.5">
+            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <h3 class="text-xs sm:text-sm font-bold text-slate-900">Catat Pengambilan Uang Karyawan</h3>
+                <button @click="isWithdrawalModalOpen = false" class="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-2.5 py-1 text-xs">
+                <div>
+                    <label class="block text-2xs font-semibold uppercase text-slate-400 mb-1">Pilih Karyawan *</label>
+                    <select x-model="newW.karyawan_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0062ff]">
+                        <option value="Karyawan 1">Karyawan 1 (Sisa Saldo: Rp {{ '{:,.0f}'.format(balances.k1.balance).replace(',', '.') }})</option>
+                        <option value="Karyawan 2">Karyawan 2 (Sisa Saldo: Rp {{ '{:,.0f}'.format(balances.k2.balance).replace(',', '.') }})</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-semibold uppercase text-slate-400 mb-1">Nominal yang Diambil (Rp) *</label>
+                    <input type="number" x-model.number="newW.amount" placeholder="misal: 500000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-semibold uppercase text-slate-400 mb-1">Terkait PO Tertentu (Opsional)</label>
+                    <select x-model="newW.po_id" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff]">
+                        <option value="">-- Umum / Tanpa Terikat PO --</option>
+                        {% for po in po_list %}
+                        <option value="{{ po.id }}">{{ po.po_number }} - {{ po.client_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-semibold uppercase text-slate-400 mb-1">Metode Pembayaran</label>
+                    <select x-model="newW.payment_method" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff]">
+                        <option value="Transfer Bank">Transfer Bank (BCA / Mandiri / dll)</option>
+                        <option value="Tunai / Cash">Tunai / Cash</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-semibold uppercase text-slate-400 mb-1">Catatan / Keterangan</label>
+                    <input type="text" x-model="newW.notes" placeholder="misal: Transfer komisi tahap 1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff]" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" @click="isWithdrawalModalOpen = false" class="px-4 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitWithdrawal()" class="px-5 py-1.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-semibold transition-all shadow-xs" :disabled="isSubmittingW">
+                    <span x-show="!isSubmittingW">Simpan Catatan</span>
+                    <span x-show="isSubmittingW">Menyimpan...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function financialApp() {
+        return {
+            isWithdrawalModalOpen: false,
+            isSubmittingW: false,
+            newW: {
+                karyawan_name: 'Karyawan 1',
+                amount: 0,
+                po_id: '',
+                payment_method: 'Transfer Bank',
+                notes: ''
+            },
+            openWithdrawalModal() {
+                this.newW = { karyawan_name: 'Karyawan 1', amount: 0, po_id: '', payment_method: 'Transfer Bank', notes: '' };
+                this.isWithdrawalModalOpen = true;
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+            },
+            async submitWithdrawal() {
+                if (!this.newW.amount || this.newW.amount <= 0) {
+                    alert('Nominal pengambilan harus lebih dari 0');
+                    return;
+                }
+                this.isSubmittingW = true;
+                try {
+                    const payload = {
+                        karyawan_name: this.newW.karyawan_name,
+                        amount: this.newW.amount,
+                        po_id: this.newW.po_id ? parseInt(this.newW.po_id) : null,
+                        payment_method: this.newW.payment_method,
+                        notes: this.newW.notes
+                    };
+                    const res = await fetch('/api/withdrawals/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal menyimpan data');
+                    window.location.reload();
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmittingW = false;
+                }
+            },
+            async deleteWithdrawal(wId) {
+                if (!confirm('Yakin ingin menghapus catatan pengambilan ini? Saldo karyawan akan otomatis dikembalikan.')) return;
+                try {
+                    const res = await fetch('/api/withdrawals/' + wId, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Gagal menghapus catatan');
+                    window.location.reload();
+                } catch (e) {
+                    alert(e.message);
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}

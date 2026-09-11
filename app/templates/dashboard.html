@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}Dashboard Operasional{% endblock %}
+{% block header_subtitle %}Ringkasan performa finansial, omzet proyek, dan alokasi bagi hasil laba bersih{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="dashboardApp()">
+    <!-- Quick Entry Command Bar (Admin Only) -->
+    {% if is_admin %}
+    <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-[#0062ff]">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span class="text-xs sm:text-sm font-bold">Input Cepat Penawaran Harga (SPH)</span>
+            </div>
+            <a href="/sph" class="text-3xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-2xs transition-all">
+                Buka Semua SPH &rarr;
+            </a>
+        </div>
+
+        <div>
+            <textarea 
+                x-model="aiPrompt" 
+                rows="2" 
+                placeholder="Tulis instruksi penawaran (contoh: Tolong buatkan SPH untuk PT Dellifood Sentosa, ditujukan ke UP Bpk. Fikri. Barangnya Sprocket RS40BX1X15T Baut Adjuster harga satuannya Rp 235.000, garansi 14 hari.)"
+                class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0062ff] focus:ring-2 focus:ring-[#0062ff]/10 font-medium resize-none transition-all"
+            ></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
+            <span class="text-3xs text-slate-400">Ekstraksi otomatis nama PT, UP, rincian barang, harga, dan garansi via AI</span>
+            <button 
+                @click="processQuickSPH()" 
+                class="w-full sm:w-auto px-4 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0" 
+                :disabled="!aiPrompt.trim()"
+            >
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span>Proses Draf SPH</span>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 4 Compact Metric Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Omzet Card -->
+        <div class="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-2xs font-semibold text-slate-500">Total Omzet (PO)</span>
+                <div class="w-7 h-7 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center">
+                    <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-base sm:text-lg font-bold font-mono text-slate-900">Rp {{ '{:,.0f}'.format(summary.total_omzet).replace(',', '.') }}</h3>
+                <p class="text-3xs text-slate-400 mt-0.5">Dari {{ summary.total_po }} kontrak Purchase Order</p>
+            </div>
+        </div>
+
+        <!-- HPP Card -->
+        <div class="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-2xs font-semibold text-slate-500">Total Pengeluaran (HPP)</span>
+                <div class="w-7 h-7 rounded-lg bg-rose-100/80 text-rose-600 flex items-center justify-center">
+                    <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-base sm:text-lg font-bold font-mono text-rose-600">Rp {{ '{:,.0f}'.format(summary.total_pengeluaran).replace(',', '.') }}</h3>
+                <p class="text-3xs text-slate-400 mt-0.5">Belanja material & ongkir proyek</p>
+            </div>
+        </div>
+
+        <!-- Laba Bersih Card -->
+        <div class="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-2xs font-semibold text-slate-500">Laba Bersih Riil</span>
+                <div class="w-7 h-7 rounded-lg bg-blue-100/80 text-[#0062ff] flex items-center justify-center">
+                    <i data-lucide="wallet" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-base sm:text-lg font-bold font-mono text-[#0062ff]">Rp {{ '{:,.0f}'.format(summary.total_laba_bersih).replace(',', '.') }}</h3>
+                <p class="text-3xs text-slate-400 mt-0.5">Margin Rata-rata {{ '{:.1f}'.format(summary.average_margin) }}%</p>
+            </div>
+        </div>
+
+        <!-- Total SPH Card -->
+        <div class="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-2xs font-semibold text-slate-500">Penawaran SPH</span>
+                <div class="w-7 h-7 rounded-lg bg-amber-100/80 text-amber-600 flex items-center justify-center">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-base sm:text-lg font-bold font-mono text-slate-900">{{ summary.total_sph }} SPH</h3>
+                <p class="text-3xs text-slate-400 mt-0.5">{{ summary.sph_po_turun_count }} SPH berhasil menjadi PO</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profit Split Box (Compact) -->
+    <div class="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 sm:p-5">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-xs sm:text-sm font-bold text-slate-800">Alokasi Pembagian Keuntungan Proyek</h3>
+                <p class="text-3xs text-slate-400 mt-0.5">Dihitung otomatis dari Laba Bersih Rp {{ '{:,.0f}'.format(summary.total_laba_bersih).replace(',', '.') }}</p>
+            </div>
+            <a href="/financial" class="text-3xs font-semibold text-[#0062ff] hover:underline">
+                Kelola Kas & Penarikan &rarr;
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold text-slate-700">Karyawan 1</span>
+                    <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">25%</span>
+                </div>
+                <div class="text-sm font-bold font-mono text-slate-900 mt-1.5">
+                    Rp {{ '{:,.0f}'.format(summary.total_karyawan_1).replace(',', '.') }}
+                </div>
+            </div>
+
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold text-slate-700">Karyawan 2</span>
+                    <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">25%</span>
+                </div>
+                <div class="text-sm font-bold font-mono text-slate-900 mt-1.5">
+                    Rp {{ '{:,.0f}'.format(summary.total_karyawan_2).replace(',', '.') }}
+                </div>
+            </div>
+
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold text-slate-700">Kas PT ADT</span>
+                    <span class="text-3xs font-mono font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100">50%</span>
+                </div>
+                <div class="text-sm font-bold font-mono text-emerald-600 mt-1.5">
+                    Rp {{ '{:,.0f}'.format(summary.total_kas).replace(',', '.') }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Orders (Compact Elevated Rows) -->
+    <div class="space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-800">Daftar Proyek / Purchase Order Terbaru</h3>
+            <a href="/po" class="text-3xs font-semibold text-[#0062ff] hover:underline">Lihat Semua PO &rarr;</a>
+        </div>
+
+        <div class="space-y-2.5 sm:space-y-2">
+            <!-- Header (Desktop Only) -->
+            <div class="hidden sm:grid grid-cols-12 text-3xs font-semibold uppercase tracking-wider text-slate-400 px-4 py-1.5">
+                <div class="col-span-3">Nomor PO & Tanggal</div>
+                <div class="col-span-3">Barang & Klien</div>
+                <div class="col-span-2">Nilai PO (Omzet)</div>
+                <div class="col-span-2">Laba Bersih</div>
+                <div class="col-span-2 text-right">Status</div>
+            </div>
+
+            {% for po in recent_po %}
+            <div class="flex flex-col sm:grid sm:grid-cols-12 items-stretch sm:items-center justify-between gap-2.5 sm:gap-0 bg-slate-50/70 hover:bg-[#0062ff] hover:text-white hover:shadow-md transition-all rounded-2xl sm:rounded-xl p-4 sm:px-4 sm:py-2.5 border border-slate-100 group text-xs w-full min-w-0 overflow-hidden">
+                <!-- Mobile Row 1: PO Number, Date & Status Badge -->
+                <div class="w-full sm:col-span-3 flex items-center justify-between sm:block min-w-0">
+                    <div class="min-w-0">
+                        <div class="font-mono font-bold text-xs text-slate-900 group-hover:text-white truncate">{{ po.po_number }}</div>
+                        <div class="text-3xs text-slate-400 group-hover:text-white/80 mt-0.5">{{ po.po_date.strftime('%d %b %Y') }}</div>
+                    </div>
+
+                    <!-- Status for Mobile Only -->
+                    <div class="sm:hidden shrink-0">
+                        {% if po.status == 'SELESAI' %}
+                            <span class="inline-flex items-center gap-1 text-3xs font-bold text-emerald-600 bg-emerald-50 group-hover:bg-white/20 group-hover:text-white px-2 py-0.5 rounded-full border border-emerald-100 group-hover:border-transparent">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 group-hover:bg-white"></span> Selesai
+                            </span>
+                        {% elif po.status == 'DALAM_PENGERJAAN' %}
+                            <span class="inline-flex items-center gap-1 text-3xs font-bold text-amber-600 bg-amber-50 group-hover:bg-white/20 group-hover:text-white px-2 py-0.5 rounded-full border border-amber-100 group-hover:border-transparent">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 group-hover:bg-white"></span> Proses
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center gap-1 text-3xs font-bold text-slate-500 bg-slate-100 group-hover:bg-white/20 group-hover:text-white px-2 py-0.5 rounded-full border border-slate-200 group-hover:border-transparent">
+                                {{ po.status }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Mobile Row 2: Barang & Klien (Full wrapping without overflowing) -->
+                <div class="w-full sm:col-span-3 sm:pr-2 min-w-0">
+                    <div class="font-bold text-xs text-slate-800 group-hover:text-white break-words sm:truncate" title="{{ po.item_summary }}">
+                        {{ po.item_summary }}
+                    </div>
+                    <div class="text-3xs text-slate-400 group-hover:text-white/80 mt-0.5 break-words sm:truncate" title="{{ po.client_name }}">
+                        {{ po.client_name }}
+                    </div>
+                </div>
+
+                <!-- Mobile Row 3: Omzet & Laba Bersih -->
+                <div class="w-full sm:col-span-2 flex sm:block items-center justify-between min-w-0 border-t sm:border-t-0 border-slate-200/60 group-hover:border-white/20 pt-2 sm:pt-0">
+                    <span class="text-3xs font-semibold text-slate-400 group-hover:text-white/70 sm:hidden">Omzet (PO):</span>
+                    <div class="font-mono font-semibold text-xs text-slate-900 group-hover:text-white">
+                        Rp {{ '{:,.0f}'.format(po.total_po_amount).replace(',', '.') }}
+                    </div>
+                </div>
+
+                <div class="w-full sm:col-span-2 flex sm:block items-center justify-between min-w-0 sm:pt-0">
+                    <span class="text-3xs font-semibold text-slate-400 group-hover:text-white/70 sm:hidden">Laba Bersih:</span>
+                    <div class="font-mono font-semibold text-xs text-blue-600 group-hover:text-white">
+                        Rp {{ '{:,.0f}'.format(po.net_profit).replace(',', '.') }}
+                    </div>
+                </div>
+
+                <!-- Action Button & Desktop Status -->
+                <div class="w-full sm:col-span-2 flex items-center justify-between sm:justify-end gap-2 min-w-0 border-t sm:border-t-0 border-slate-200/60 group-hover:border-white/20 pt-2 sm:pt-0">
+                    <div class="hidden sm:block text-right">
+                        {% if po.status == 'SELESAI' %}
+                            <span class="inline-flex items-center gap-1 text-2xs font-semibold text-emerald-600 group-hover:text-white">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 group-hover:bg-white"></span> Selesai
+                            </span>
+                        {% elif po.status == 'DALAM_PENGERJAAN' %}
+                            <span class="inline-flex items-center gap-1 text-2xs font-semibold text-amber-500 group-hover:text-white">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 group-hover:bg-white"></span> Proses
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center gap-1 text-2xs font-semibold text-slate-400 group-hover:text-white">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-white"></span> {{ po.status }}
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <a href="/po/{{ po.id }}" class="w-full sm:w-auto p-2 sm:p-1 rounded-xl sm:rounded-lg bg-white text-slate-600 group-hover:bg-white/20 group-hover:text-white border border-slate-200 group-hover:border-transparent transition-colors flex items-center justify-center gap-1 text-2xs font-semibold shadow-2xs">
+                        <span class="sm:hidden">Buka Rincian PO</span>
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                    </a>
+                </div>
+            </div>
+            {% else %}
+            <div class="bg-slate-50 rounded-xl p-6 text-center text-2xs text-slate-400">
+                Belum ada data Purchase Order (PO).
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function dashboardApp() {
+        return {
+            aiPrompt: '',
+            processQuickSPH() {
+                if (!this.aiPrompt.trim()) return;
+                sessionStorage.setItem('adt_ai_prompt', this.aiPrompt);
+                window.location.href = '/sph#quick-entry';
+            }
+        };
+    }
+</script>
+{% endblock %}

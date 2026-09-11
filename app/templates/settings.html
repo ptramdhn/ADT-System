@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Pengaturan | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}Pengaturan Sistem{% endblock %}
+{% block header_subtitle %}Konfigurasi profil perusahaan, rekening resmi, dan status integrasi database{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-4xl" x-data="settingsApp()">
+    <!-- Profile Card -->
+    <div class="bg-slate-50 border border-slate-100 rounded-3xl p-7 shadow-xs">
+        <h3 class="text-sm font-extrabold text-slate-900">Profil & Rekening Resmi PT Anugrah Djaya Tunggal</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Informasi kop surat dan format nomor SPH otomatis</p>
+
+        <div class="space-y-4 mt-6 text-xs">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nama Perusahaan</label>
+                    <input type="text" value="PT ANUGRAH DJAYA TUNGGAL" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none" readonly />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nomor Rekening Pembayaran</label>
+                    <input type="text" value="BCA 0663363066 a/n PT ANUGRAH DJAYA TUNGGAL" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:outline-none" readonly />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Format Nomor Surat Penawaran</label>
+                <div class="bg-white p-3.5 rounded-xl border border-slate-200 font-mono text-xs font-bold text-[#0062ff]">
+                    No. [URUT]/SPH/ADT/[BULAN_ROMAWI]/[TAHUN]
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Integrasi Database & AI -->
+    <div class="bg-slate-50 border border-slate-100 rounded-3xl p-7 shadow-xs">
+        <h3 class="text-sm font-extrabold text-slate-900">Koneksi Database & Integrasi</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Layanan penyimpanan data dan pemrosesan AI</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+            <div class="bg-white p-4 rounded-2xl border border-slate-200/80">
+                <span class="text-2xs font-bold uppercase text-slate-400">Database Utama</span>
+                <div class="text-xs font-extrabold text-emerald-600 mt-1 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>MySQL Localhost:3306 (adt_system)</span>
+                </div>
+                <p class="text-2xs text-slate-400 mt-1">Data tersimpan di laptop lokal.</p>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl border border-slate-200/80">
+                <span class="text-2xs font-bold uppercase text-slate-400">Model Pemrosesan</span>
+                <div class="text-xs font-extrabold text-[#0062ff] mt-1 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-[#0062ff]"></span>
+                    <span>Open Mistral NeMo (Auto-Fallback)</span>
+                </div>
+                <p class="text-2xs text-slate-400 mt-1">Ekstraksi cerdas teks, SPH & pembacaan PDF PO.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function settingsApp() {
+        return {};
+    }
+</script>
+{% endblock %}

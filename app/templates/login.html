@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PIN Akses | PT Anugrah Djaya Tunggal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.7/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; background: #eef3f9; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 antialiased text-slate-800" x-data="loginApp()">
+    <div class="w-full max-w-sm bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,35,90,0.08)] border border-slate-100 p-7 text-center">
+        <!-- Logo & Header -->
+        <div class="w-12 h-12 rounded-2xl bg-[#0062ff]/10 text-[#0062ff] flex items-center justify-center mx-auto mb-3 shadow-inner">
+            <img src="/static/logo.png" alt="ADT Logo" class="w-8 h-8 object-contain rounded-lg">
+        </div>
+        <h1 class="text-sm font-bold text-slate-900 tracking-tight">PT ANUGRAH DJAYA TUNGGAL</h1>
+        <p class="text-xs text-slate-400 font-medium mt-0.5">Sistem Operasional & Finansial</p>
+
+        <!-- Lock Indicator -->
+        <div class="my-4 p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center gap-2 text-xs font-semibold text-slate-600">
+            <i data-lucide="lock" class="w-4 h-4 text-[#0062ff]"></i>
+            <span>Masukkan 6 Digit PIN Keamanan</span>
+        </div>
+
+        <!-- PIN Input Form -->
+        <form @submit.prevent="submitPIN()" class="space-y-4">
+            <div>
+                <input 
+                    type="password" 
+                    x-model="pin" 
+                    maxlength="6" 
+                    placeholder="• • • • • •" 
+                    class="w-full text-center tracking-[0.5em] text-xl font-mono font-bold bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-slate-900 focus:outline-none focus:border-[#0062ff] focus:ring-2 focus:ring-[#0062ff]/10 transition-all placeholder-slate-300"
+                    autofocus
+                    required
+                    @input="if(pin.length === 6) submitPIN()"
+                />
+            </div>
+
+            <!-- Error Banner -->
+            <div x-show="errorMessage" class="bg-rose-50 border border-rose-200 text-rose-600 px-3 py-2 rounded-xl text-xs font-semibold" x-text="errorMessage" x-cloak></div>
+
+            <button 
+                type="submit" 
+                class="w-full py-2.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-2xl text-xs font-bold transition-all shadow-[0_4px_14px_rgba(0,98,255,0.25)] flex items-center justify-center gap-2"
+                :disabled="isLoading || pin.length < 6"
+            >
+                <span x-show="!isLoading">Masuk ke Sistem</span>
+                <span x-show="isLoading" class="flex items-center gap-1.5">
+                    <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>Memverifikasi...</span>
+                </span>
+            </button>
+        </form>
+
+    </div>
+
+    <script>
+        lucide.createIcons();
+        function loginApp() {
+            return {
+                pin: '',
+                isLoading: false,
+                errorMessage: '',
+                async submitPIN() {
+                    if (this.pin.length < 6) return;
+                    this.isLoading = true;
+                    this.errorMessage = '';
+                    try {
+                        const res = await fetch('/api/auth/verify-pin', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ pin: this.pin })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'PIN Salah');
+                        window.location.href = '/';
+                    } catch (e) {
+                        this.errorMessage = e.message;
+                        this.pin = '';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>

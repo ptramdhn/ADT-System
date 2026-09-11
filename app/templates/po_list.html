@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% block title %}Purchase Orders (PO) | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}Purchase Order & Proyek{% endblock %}
+{% block header_subtitle %}Pantau realisasi HPP dan pembagian laba bersih per kontrak proyek{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="poApp()">
+    <!-- Top Filter Bar & Actions -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            <button @click="statusFilter = 'ALL'" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0" :class="statusFilter === 'ALL' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900 bg-slate-100'">
+                Semua PO
+            </button>
+            <button @click="statusFilter = 'DALAM_PENGERJAAN'" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0" :class="statusFilter === 'DALAM_PENGERJAAN' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900 bg-slate-100'">
+                Dalam Proses
+            </button>
+            <button @click="statusFilter = 'SELESAI'" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0" :class="statusFilter === 'SELESAI' ? 'bg-[#0062ff] text-white shadow-2xs' : 'text-slate-500 hover:text-slate-900 bg-slate-100'">
+                Selesai
+            </button>
+        </div>
+
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+            <input 
+                type="text" 
+                x-model="searchQuery" 
+                placeholder="Cari No. PO / Barang / Klien..." 
+                class="w-full sm:w-64 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0062ff] font-medium" 
+            />
+            {% if is_admin %}
+            <button @click="openCreateModal()" class="px-4 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Tambah PO</span>
+                <span class="sm:hidden">Tambah</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Responsive Order Rows (Cards on Mobile, Grid on Desktop) -->
+    <div class="space-y-2">
+        <!-- Desktop Header -->
+        <div class="hidden sm:grid grid-cols-12 text-3xs font-bold uppercase tracking-wider text-slate-400 px-4 py-1.5">
+            <div class="col-span-3">Nomor PO & Tanggal</div>
+            <div class="col-span-3">Nama Barang & Klien</div>
+            <div class="col-span-2">Nilai Kontrak (Omzet)</div>
+            <div class="col-span-2">Laba Bersih & Margin</div>
+            <div class="col-span-2 text-right">Status & Aksi</div>
+        </div>
+
+        {% for po in po_list %}
+        <div 
+            class="flex flex-col sm:grid sm:grid-cols-12 items-stretch sm:items-center justify-between gap-3 sm:gap-0 bg-white hover:bg-slate-50 transition-all rounded-2xl sm:rounded-xl p-4 sm:px-4 sm:py-3 border border-slate-200/80 shadow-2xs group w-full min-w-0 overflow-hidden"
+            x-show="matchesFilter('{{ po.status }}') && matchesSearch({{ po.po_number | tojson }}, {{ po.client_name | tojson }}, {{ po.item_summary | tojson }})"
+        >
+            <div class="w-full sm:col-span-3 flex items-center justify-between sm:block min-w-0">
+                <div class="min-w-0">
+                    <div class="font-mono font-bold text-xs text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>{{ po.po_number }}</span>
+                        {% if po.sph_id %}
+                        <a href="/api/sph/download/{{ po.sph_id }}" target="_blank" class="px-2 py-0.5 rounded-full bg-blue-50 text-[#0062ff] text-3xs font-mono font-bold border border-blue-100 hover:underline shrink-0" title="Lihat SPH">
+                            SPH
+                        </a>
+                        {% endif %}
+                        {% if po.po_pdf_filename %}
+                        <a href="/api/po/download-pdf/{{ po.id }}" target="_blank" class="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-3xs font-mono font-bold border border-rose-100 hover:underline shrink-0" title="Lihat PDF Asli Klien">
+                            PDF
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="text-2xs text-slate-400 mt-0.5">{{ po.po_date.strftime('%d %b %Y') }}</div>
+                </div>
+                <div class="sm:hidden shrink-0">
+                    {% if po.status == 'SELESAI' %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Selesai
+                        </span>
+                    {% elif po.status == 'DALAM_PENGERJAAN' %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Proses
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                            {{ po.status }}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Nama Barang (Bold Highlight) & Nama Klien (Small Subtitle) -->
+            <div class="w-full sm:col-span-3 sm:pr-2 min-w-0">
+                <div class="font-bold text-xs text-slate-800 break-words sm:truncate" title="{{ po.item_summary }}">
+                    {{ po.item_summary }}
+                </div>
+                <div class="text-2xs text-slate-400 mt-0.5 break-words sm:truncate" title="{{ po.client_name }}">
+                    <span class="text-slate-400 font-medium">Klien:</span> <span class="font-medium text-slate-600">{{ po.client_name }}</span>
+                </div>
+            </div>
+
+            <div class="w-full sm:col-span-2 flex sm:block items-center justify-between border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 min-w-0">
+                <span class="text-3xs font-bold uppercase text-slate-400 sm:hidden">Omzet / HPP:</span>
+                <div>
+                    <div class="font-mono font-bold text-xs sm:text-sm text-slate-900">
+                        Rp {{ '{:,.0f}'.format(po.total_po_amount).replace(',', '.') }}
+                    </div>
+                    <div class="text-2xs text-rose-500 font-medium mt-0.5">
+                        HPP: Rp {{ '{:,.0f}'.format(po.total_expense).replace(',', '.') }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full sm:col-span-2 flex sm:block items-center justify-between border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 min-w-0">
+                <span class="text-3xs font-bold uppercase text-slate-400 sm:hidden">Laba Bersih:</span>
+                <div>
+                    <div class="font-mono font-bold text-xs sm:text-sm text-[#0062ff]">
+                        Rp {{ '{:,.0f}'.format(po.net_profit).replace(',', '.') }}
+                    </div>
+                    <div class="mt-0.5">
+                        <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">
+                            Margin {{ '{:.1f}'.format(po.margin_percentage) }}%
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full sm:col-span-2 text-right flex items-center justify-between sm:justify-end gap-2 border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 min-w-0">
+                <div class="hidden sm:block">
+                    {% if po.status == 'SELESAI' %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Selesai
+                        </span>
+                    {% elif po.status == 'DALAM_PENGERJAAN' %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Proses
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1 text-3xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                            {{ po.status }}
+                        </span>
+                    {% endif %}
+                </div>
+
+                <a href="/po/{{ po.id }}" class="w-full sm:w-auto px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center gap-1 text-xs font-semibold transition-colors shadow-2xs">
+                    <span>Kelola</span>
+                    <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-slate-50 rounded-xl p-8 text-center text-xs font-semibold text-slate-400 border border-slate-200/60">
+            Belum ada Purchase Order (PO) yang tercatat.
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Modal Create PO Standalone -->
+    <div x-show="isCreateModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-md w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900">Tambah Purchase Order (PO) Baru</h3>
+                <button @click="isCreateModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <!-- PDF Upload Zone -->
+                <div class="bg-blue-50/60 p-4 rounded-2xl border border-dashed border-blue-200 text-center">
+                    <div class="flex items-center justify-center gap-1.5 text-[#0062ff] font-bold text-xs mb-0.5">
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                        <span>Upload PDF PO dari Klien</span>
+                    </div>
+                    <p class="text-3xs font-medium text-slate-400 mb-2">Ekstraksi otomatis nomor PO & nilai kontrak</p>
+                    
+                    <input type="file" @change="handlePOFileUpload($event)" accept=".pdf" class="block w-full text-2xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-2xs file:font-bold file:bg-[#0062ff] file:text-white hover:file:bg-[#0052e0] cursor-pointer" :disabled="isUploadingPO" />
+                    
+                    <div x-show="isUploadingPO" class="flex items-center justify-center gap-2 mt-2 text-2xs font-bold text-[#0062ff]" x-cloak>
+                        <span class="w-3 h-3 border-2 border-[#0062ff]/30 border-t-[#0062ff] rounded-full animate-spin"></span>
+                        <span>Membaca PDF PO...</span>
+                    </div>
+
+                    <div x-show="newPO.po_pdf_filename" class="text-2xs font-bold text-emerald-600 mt-1.5 truncate" x-cloak>
+                        ✓ <span x-text="newPO.po_pdf_filename"></span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nomor PO *</label>
+                    <input type="text" x-model="newPO.po_number" placeholder="misal: PO-ADT/2026/001" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nama Perusahaan Klien *</label>
+                    <input type="text" x-model="newPO.client_name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nilai Total Kontrak PO (Rp) *</label>
+                    <input type="number" x-model.number="newPO.total_po_amount" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Catatan</label>
+                    <textarea x-model="newPO.notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isCreateModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitNewPO()" class="px-6 py-2.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-bold transition-all shadow-[0_4px_12px_rgba(0,98,255,0.25)]" :disabled="isSubmitting">
+                    <span x-show="!isSubmitting">Simpan PO</span>
+                    <span x-show="isSubmitting">Menyimpan...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function poApp() {
+        return {
+            statusFilter: 'ALL',
+            searchQuery: '',
+            isCreateModalOpen: false,
+            isSubmitting: false,
+            newPO: {
+                po_number: '',
+                client_name: '',
+                total_po_amount: 0,
+                notes: '',
+                po_pdf_filename: null,
+                items: []
+            },
+            isUploadingPO: false,
+            matchesFilter(status) {
+                if (this.statusFilter === 'ALL') return true;
+                return status === this.statusFilter;
+            },
+            matchesSearch(no, client, item = '') {
+                if (!this.searchQuery.trim()) return true;
+                const q = this.searchQuery.toLowerCase();
+                return no.toLowerCase().includes(q) || client.toLowerCase().includes(q) || item.toLowerCase().includes(q);
+            },
+            openCreateModal() {
+                this.newPO = { po_number: '', client_name: '', total_po_amount: 0, notes: '', po_pdf_filename: null, items: [] };
+                this.isCreateModalOpen = true;
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            async handlePOFileUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                this.isUploadingPO = true;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const res = await fetch('/api/po/upload-extract', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal memproses file PDF PO');
+                    
+                    this.newPO.po_pdf_filename = resData.filename;
+                    const d = resData.data;
+                    if (d.po_number) this.newPO.po_number = d.po_number;
+                    if (d.client_name) this.newPO.client_name = d.client_name;
+                    if (d.total_po_amount) this.newPO.total_po_amount = d.total_po_amount;
+                    if (d.notes) this.newPO.notes = d.notes;
+                    if (d.items) this.newPO.items = d.items;
+                } catch (e) {
+                    alert('Upload error: ' + e.message);
+                } finally {
+                    this.isUploadingPO = false;
+                }
+            },
+            async submitNewPO() {
+                if (!this.newPO.po_number || !this.newPO.client_name || !this.newPO.total_po_amount) {
+                    alert('Harap isi No. PO, Nama Klien, dan Nilai PO');
+                    return;
+                }
+                this.isSubmitting = true;
+                try {
+                    const res = await fetch('/api/po/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.newPO)
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal membuat PO');
+                    window.location.href = '/po/' + resData.data.id;
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmitting = false;
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+{% block title %}Tanya Database | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}Asisten Database PT ADT{% endblock %}
+{% block header_subtitle %}Tanyakan riwayat penawaran harga barang, status PO, dan saldo keuangan secara akurat{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    .chat-prose p { margin-bottom: 0.5rem; }
+    .chat-prose p:last-child { margin-bottom: 0; }
+    .chat-prose ul { list-style-type: disc; padding-left: 1.25rem; margin-top: 0.35rem; margin-bottom: 0.5rem; }
+    .chat-prose ol { list-style-type: decimal; padding-left: 1.25rem; margin-top: 0.35rem; margin-bottom: 0.5rem; }
+    .chat-prose li { margin-bottom: 0.25rem; }
+    .chat-prose strong { font-weight: 700; color: #0f172a; }
+    .chat-prose code { background: #f1f5f9; padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.75rem; }
+</style>
+
+<div class="h-[calc(100vh-6.5rem)] flex flex-col justify-between max-w-4xl mx-auto w-full pb-2" x-data="chatApp()" x-init="init()">
+    
+    <!-- Top Action Toolbar -->
+    <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-2 shrink-0">
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-2xs font-semibold text-slate-600">Asisten Terhubung Langsung ke MySQL</span>
+        </div>
+        <button @click="clearChat()" class="text-3xs font-semibold text-slate-400 hover:text-rose-600 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-rose-50">
+            <i data-lucide="trash-2" class="w-3 h-3"></i>
+            <span>Bersihkan Percakapan</span>
+        </button>
+    </div>
+
+    <!-- Messages Container (Clean Seamless Stream) -->
+    <div class="flex-1 overflow-y-auto space-y-4 pr-2 mb-3" id="chat-box">
+        
+        <!-- Welcome Message Bubble -->
+        <div class="flex items-start gap-3 max-w-2xl">
+            <div class="w-7 h-7 rounded-xl bg-[#0062ff] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs mt-0.5">
+                <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="space-y-1">
+                <span class="text-3xs font-semibold text-slate-400">Asisten Database PT ADT</span>
+                <div class="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl rounded-tl-xs text-xs text-slate-700 leading-relaxed shadow-2xs">
+                    Halo! Saya asisten operasional PT Anugrah Djaya Tunggal. Anda dapat menanyakan riwayat penawaran harga barang (SPH), apakah suatu penawaran sudah menjadi PO, total omzet/laba bersih, maupun sisa saldo hak bagi hasil karyawan.
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat History Loop -->
+        <template x-for="(msg, idx) in messages" :key="idx">
+            <div class="flex items-start gap-2.5" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
+                
+                <!-- Assistant Icon -->
+                <div x-show="msg.role !== 'user'" class="w-7 h-7 rounded-xl bg-[#0062ff] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs mt-0.5">
+                    <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+                </div>
+
+                <!-- Bubble Container -->
+                <div class="space-y-1 max-w-2xl" :class="msg.role === 'user' ? 'text-right' : ''">
+                    <span class="text-3xs font-semibold text-slate-400" x-text="msg.role === 'user' ? 'Anda' : 'Asisten Database PT ADT'"></span>
+                    
+                    <!-- User Message -->
+                    <div 
+                        x-show="msg.role === 'user'"
+                        class="p-3 sm:p-3.5 rounded-2xl rounded-tr-xs text-xs font-medium leading-relaxed bg-[#0062ff] text-white shadow-xs ml-auto whitespace-pre-wrap"
+                        x-text="msg.text"
+                    ></div>
+
+                    <!-- Assistant Message (Rendered Clean HTML) -->
+                    <div 
+                        x-show="msg.role !== 'user'"
+                        class="p-3.5 sm:p-4 rounded-2xl rounded-tl-xs text-xs leading-relaxed bg-slate-50/80 border border-slate-200/80 text-slate-800 shadow-2xs chat-prose"
+                        x-html="renderMarkdown(msg.text)"
+                    ></div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Loading Indicator -->
+        <div class="flex items-start gap-2.5 max-w-2xl" x-show="isLoading" x-cloak>
+            <div class="w-7 h-7 rounded-xl bg-[#0062ff] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs mt-0.5">
+                <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl rounded-tl-xs text-xs font-semibold text-[#0062ff] flex items-center gap-2 shadow-2xs">
+                <span class="w-3 h-3 border-2 border-[#0062ff]/30 border-t-[#0062ff] rounded-full animate-spin"></span>
+                <span>Memeriksa database MySQL...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Action Section (Suggestions & Input Bar) -->
+    <div class="space-y-2 shrink-0 pt-1">
+        <!-- Suggested Questions Pills -->
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-2xs">
+            <span class="text-3xs font-bold uppercase tracking-wider text-slate-400 shrink-0">Contoh:</span>
+            <button @click="usePrompt('Apakah pernah buat penawaran untuk barang Sprocket?')" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-[#0062ff] hover:text-white text-slate-600 font-medium transition-all whitespace-nowrap shadow-2xs">
+                📦 Penawaran Sprocket
+            </button>
+            <button @click="usePrompt('Apakah untuk penawaran 0002 sudah turun PO?')" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-[#0062ff] hover:text-white text-slate-600 font-medium transition-all whitespace-nowrap shadow-2xs">
+                📑 Status SPH 0002
+            </button>
+            <button @click="usePrompt('Berapa keuntungan yang masuk ke kas perusahaan sekarang?')" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-[#0062ff] hover:text-white text-slate-600 font-medium transition-all whitespace-nowrap shadow-2xs">
+                💰 Kas Perusahaan
+            </button>
+            <button @click="usePrompt('Berapa sisa saldo hak bagi hasil Karyawan 1 dan Karyawan 2?')" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-[#0062ff] hover:text-white text-slate-600 font-medium transition-all whitespace-nowrap shadow-2xs">
+                👥 Saldo Karyawan
+            </button>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="bg-slate-50 p-2 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-2">
+            <input 
+                type="text" 
+                x-model="inputQuery" 
+                @keydown.enter="sendQuery()"
+                placeholder="Tanyakan riwayat barang, nomor SPH/PO, biaya, atau saldo karyawan..." 
+                class="flex-1 bg-white border border-slate-200/80 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0062ff] font-medium"
+                :disabled="isLoading"
+            />
+            <button @click="sendQuery()" class="px-5 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 shrink-0" :disabled="isLoading || !inputQuery.trim()">
+                <span x-show="!isLoading" class="flex items-center gap-1.5"><i data-lucide="send" class="w-3.5 h-3.5"></i> Kirim</span>
+                <span x-show="isLoading" class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function chatApp() {
+        return {
+            inputQuery: '',
+            isLoading: false,
+            messages: [],
+            init() {
+                const saved = localStorage.getItem('adt_chat_history');
+                if (saved) {
+                    try { this.messages = JSON.parse(saved); } catch (e) {}
+                }
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+            },
+            renderMarkdown(text) {
+                if (!text) return '';
+                if (window.marked) {
+                    return marked.parse(text);
+                }
+                return text;
+            },
+            saveHistory() {
+                localStorage.setItem('adt_chat_history', JSON.stringify(this.messages));
+            },
+            clearChat() {
+                this.messages = [];
+                localStorage.removeItem('adt_chat_history');
+            },
+            usePrompt(txt) {
+                this.inputQuery = txt;
+                this.sendQuery();
+            },
+            async sendQuery() {
+                const q = this.inputQuery.trim();
+                if (!q || this.isLoading) return;
+                
+                this.messages.push({ role: 'user', text: q });
+                this.inputQuery = '';
+                this.isLoading = true;
+                this.scrollToBottom();
+
+                try {
+                    const res = await fetch('/api/chat/ask', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: q })
+                    });
+                    const resData = await res.json();
+                    if (!res.ok) throw new Error(resData.detail || 'Gagal memproses pertanyaan');
+                    
+                    this.messages.push({ role: 'assistant', text: resData.reply });
+                    this.saveHistory();
+                } catch (e) {
+                    this.messages.push({ role: 'assistant', text: 'Gagal: ' + e.message });
+                } finally {
+                    this.isLoading = false;
+                    this.scrollToBottom();
+                    setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+                }
+            },
+            scrollToBottom() {
+                setTimeout(() => {
+                    const box = document.getElementById('chat-box');
+                    if (box) box.scrollTop = box.scrollHeight;
+                }, 50);
+            }
+        };
+    }
+</script>
+{% endblock %}

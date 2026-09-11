@@ -1,0 +1,589 @@
+{% extends 'base.html' %}
+{% block title %}PO {{ po.po_number }} | PT Anugrah Djaya Tunggal{% endblock %}
+{% block header_title %}{{ po.po_number }}{% endblock %}
+{% block header_subtitle %}Detail kontrak, rincian barang, buku kas pengeluaran proyek (HPP), dan pembagian keuntungan{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="poDetailApp()" x-init="initData()">
+    <!-- Top Action Card -->
+    <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
+        <div class="space-y-1.5">
+            <div class="flex items-center gap-2.5 flex-wrap">
+                <a href="/po" class="w-7 h-7 rounded-xl bg-white text-slate-600 hover:text-slate-900 border border-slate-200 flex items-center justify-center transition-colors shadow-2xs" title="Kembali ke Daftar PO">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                </a>
+                <span class="text-base sm:text-lg font-bold font-mono text-slate-900">{{ po.po_number }}</span>
+                
+                {% if po.sph %}
+                <a href="/api/sph/download/{{ po.sph.id }}" target="_blank" class="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#0062ff] text-3xs font-mono font-bold flex items-center gap-1 hover:underline border border-blue-100" title="Buka PDF SPH di Tab Baru">
+                    <i data-lucide="file-text" class="w-3 h-3"></i> {{ po.sph.sph_number }}
+                </a>
+                {% endif %}
+                
+                {% if po.po_pdf_filename %}
+                <a href="/api/po/download-pdf/{{ po.id }}" target="_blank" class="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 text-3xs font-mono font-bold flex items-center gap-1 hover:underline border border-rose-100" title="Buka PDF PO Klien di Tab Baru">
+                    <i data-lucide="file-down" class="w-3 h-3"></i> PDF PO Asli Klien
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Nama Barang Highlighted -->
+            <div class="flex items-center gap-2 flex-wrap pt-0.5">
+                <span class="text-xs sm:text-sm font-bold text-slate-800">{{ po.item_summary }}</span>
+            </div>
+
+            <p class="text-2xs text-slate-400 font-medium">
+                <span class="text-slate-400 font-semibold">Klien:</span> <span class="text-slate-700 font-bold">{{ po.client_name }}</span> &bull; 
+                <span class="font-mono text-slate-400">{{ po.po_date.strftime('%d %B %Y') }}</span>
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+            <span class="text-xs font-bold text-slate-500">Status Proyek:</span>
+            {% if is_admin %}
+            <select x-model="status" @change="updateStatus()" class="bg-white border border-slate-200 rounded-xl px-3.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#0062ff] shadow-2xs">
+                <option value="DALAM_PENGERJAAN">⏳ Dalam Proses</option>
+                <option value="SELESAI">✅ Selesai</option>
+                <option value="BATAL">❌ Batal</option>
+            </select>
+            {% else %}
+            <div>
+                {% if po.status == 'SELESAI' %}
+                    <span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Selesai
+                    </span>
+                {% elif po.status == 'DALAM_PENGERJAAN' %}
+                    <span class="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span> Dalam Proses
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center gap-1 text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                        {{ po.status }}
+                    </span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Section: Rincian Barang Kontrak PO -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-3">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-xs font-bold text-slate-900">Rincian Barang yang Dipesan (Purchase Order)</h3>
+                <p class="text-2xs text-slate-400 mt-0.5">Daftar item fisik dan spesifikasi barang sesuai kontrak PO ini</p>
+            </div>
+            {% if is_admin %}
+            <button @click="openEditItemsModal()" class="text-2xs font-bold text-[#0062ff] px-3 py-1 rounded-xl bg-blue-50/60 border border-blue-100 hover:bg-blue-100/60 transition-all flex items-center gap-1">
+                <i data-lucide="edit-3" class="w-3 h-3"></i>
+                <span>Edit Barang PO</span>
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="border border-slate-200/80 rounded-xl overflow-x-auto no-scrollbar">
+            <table class="w-full text-left text-xs min-w-[500px]">
+                <thead class="bg-slate-50 border-b border-slate-200 text-3xs font-bold uppercase text-slate-400">
+                    <tr>
+                        <th class="p-3 w-10 text-center">No</th>
+                        <th class="p-3">Deskripsi & Spesifikasi Barang</th>
+                        <th class="p-3 text-center w-24">Qty</th>
+                        <th class="p-3 text-right w-36">Harga Satuan</th>
+                        <th class="p-3 text-right w-36">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% if po.items and po.items|length > 0 %}
+                        {% for it in po.items %}
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="p-3 text-center font-mono text-slate-400 text-2xs">{{ loop.index }}</td>
+                            <td class="p-3 font-semibold text-slate-800">{{ it.description }}</td>
+                            <td class="p-3 text-center font-mono text-slate-700 font-bold">{{ it.qty if it.qty else 1 }}</td>
+                            <td class="p-3 text-right font-mono text-slate-600">Rp {{ '{:,.0f}'.format(it.price if it.price else 0).replace(',', '.') }}</td>
+                            <td class="p-3 text-right font-mono font-bold text-slate-900">Rp {{ '{:,.0f}'.format((it.price if it.price else 0) * (it.qty if it.qty else 1)).replace(',', '.') }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td class="p-3 text-center font-mono text-slate-400 text-2xs">1</td>
+                            <td class="p-3 font-semibold text-slate-800">{{ po.item_summary }}</td>
+                            <td class="p-3 text-center font-mono text-slate-700 font-bold">1 Lot</td>
+                            <td class="p-3 text-right font-mono text-slate-600">Rp {{ '{:,.0f}'.format(po.total_po_amount).replace(',', '.') }}</td>
+                            <td class="p-3 text-right font-mono font-bold text-slate-900">Rp {{ '{:,.0f}'.format(po.total_po_amount).replace(',', '.') }}</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot class="bg-blue-50/40 border-t border-slate-200">
+                    <tr>
+                        <td colspan="4" class="p-3 text-right text-xs font-bold text-slate-700">Total Nilai Kontrak PO:</td>
+                        <td class="p-3 text-right font-mono font-bold text-sm text-[#0062ff]">Rp {{ '{:,.0f}'.format(po.total_po_amount).replace(',', '.') }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {% if po.notes %}
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-2xs text-slate-600 flex items-start gap-2">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-[#0062ff] shrink-0 mt-0.5"></i>
+            <div>
+                <span class="font-bold text-slate-700">Catatan / Syarat Pembayaran:</span>
+                <p class="text-slate-500 mt-0.5">{{ po.notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 3 Big Metric Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Nilai PO -->
+        <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div class="flex items-center justify-between text-slate-400 mb-1.5">
+                <span class="text-2xs font-bold uppercase tracking-wider text-slate-500">1. Nilai Kontrak (Omzet)</span>
+                <div class="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                    <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+            <h3 class="text-xl font-bold font-mono text-slate-900">Rp {{ '{:,.0f}'.format(po.total_po_amount).replace(',', '.') }}</h3>
+            <p class="text-3xs font-medium text-slate-400 mt-1">Pendapatan kotor proyek</p>
+        </div>
+
+        <!-- Realisasi HPP -->
+        <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div class="flex items-center justify-between text-slate-400 mb-1.5">
+                <span class="text-2xs font-bold uppercase tracking-wider text-slate-500">2. Realisasi Pengeluaran (HPP)</span>
+                <div class="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+                    <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+            <h3 class="text-xl font-bold font-mono text-rose-600">Rp {{ '{:,.0f}'.format(po.total_expense).replace(',', '.') }}</h3>
+            <p class="text-3xs font-medium text-slate-400 mt-1">{{ po.expenses|length }} transaksi pengeluaran</p>
+        </div>
+
+        <!-- Laba Bersih -->
+        <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-2xs">
+            <div class="flex items-center justify-between text-slate-400 mb-1.5">
+                <span class="text-2xs font-bold uppercase tracking-wider text-slate-500">3. Laba Bersih Proyek</span>
+                <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">
+                    Margin {{ '{:.1f}'.format(po.margin_percentage) }}%
+                </span>
+            </div>
+            <h3 class="text-xl font-bold font-mono text-[#0062ff]">Rp {{ '{:,.0f}'.format(po.net_profit).replace(',', '.') }}</h3>
+            <p class="text-3xs font-medium text-blue-600 mt-1">Siap untuk dibagihasilkan</p>
+        </div>
+    </div>
+
+    <!-- Profit Split Section -->
+    <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200/80 shadow-2xs">
+        <div class="flex items-center justify-between mb-3.5">
+            <div>
+                <h3 class="text-xs font-bold text-slate-900">Alokasi Pembagian Keuntungan Proyek Ini</h3>
+                <p class="text-2xs text-slate-400 mt-0.5">Dihitung otomatis dari Laba Bersih Rp {{ '{:,.0f}'.format(po.net_profit).replace(',', '.') }}</p>
+            </div>
+            {% if is_admin %}
+            <button @click="openSplitModal()" class="text-2xs font-bold text-[#0062ff] px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all">
+                Ubah Persentase
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-700">{{ po.profit_split.karyawan_1_name if po.profit_split else 'Karyawan 1' }}</span>
+                    <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">{{ po.profit_split.karyawan_1_percent if po.profit_split else 25 }}%</span>
+                </div>
+                <div class="text-base font-bold font-mono text-slate-900 mt-1.5">
+                    Rp {{ '{:,.0f}'.format(po.profit_split.karyawan_1_amount if po.profit_split else 0).replace(',', '.') }}
+                </div>
+                <span class="text-3xs font-medium text-slate-400 mt-0.5 block">Hak Bagian Karyawan 1</span>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-700">{{ po.profit_split.karyawan_2_name if po.profit_split else 'Karyawan 2' }}</span>
+                    <span class="text-3xs font-mono font-bold bg-blue-50 text-[#0062ff] px-2 py-0.5 rounded-full border border-blue-100">{{ po.profit_split.karyawan_2_percent if po.profit_split else 25 }}%</span>
+                </div>
+                <div class="text-base font-bold font-mono text-slate-900 mt-1.5">
+                    Rp {{ '{:,.0f}'.format(po.profit_split.karyawan_2_amount if po.profit_split else 0).replace(',', '.') }}
+                </div>
+                <span class="text-3xs font-medium text-slate-400 mt-0.5 block">Hak Bagian Karyawan 2</span>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-700">Kas PT ADT</span>
+                    <span class="text-3xs font-mono font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100">{{ po.profit_split.kas_perusahaan_percent if po.profit_split else 50 }}%</span>
+                </div>
+                <div class="text-base font-bold font-mono text-emerald-600 mt-1.5">
+                    Rp {{ '{:,.0f}'.format(po.profit_split.kas_perusahaan_amount if po.profit_split else 0).replace(',', '.') }}
+                </div>
+                <span class="text-3xs font-medium text-slate-400 mt-0.5 block">Kas Cadangan Perusahaan</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expenses Table Section -->
+    <div class="space-y-3.5">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-xs sm:text-sm font-bold text-slate-800">Buku Kas Pengeluaran Proyek (HPP)</h3>
+                <p class="text-2xs text-slate-400 mt-0.5">Catatan seluruh belanja material, ongkir, jasa bubut untuk PO ini</p>
+            </div>
+            {% if is_admin %}
+            <button @click="openExpenseModal()" class="px-4 py-2 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>Catat Pengeluaran Baru</span>
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200/80 overflow-x-auto no-scrollbar shadow-2xs">
+            <table class="w-full text-left text-xs min-w-[550px]">
+                <thead class="bg-slate-50 border-b border-slate-200 text-3xs font-bold uppercase text-slate-400">
+                    <tr>
+                        <th class="p-3.5">Tanggal</th>
+                        <th class="p-3.5">Kategori</th>
+                        <th class="p-3.5">Deskripsi Biaya</th>
+                        <th class="p-3.5">Vendor / Suplier</th>
+                        <th class="p-3.5 text-right">Nominal</th>
+                        {% if is_admin %}
+                        <th class="p-3.5 text-center w-12">Aksi</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-medium">
+                    {% for exp in po.expenses %}
+                    <tr class="hover:bg-slate-50/60 transition-colors">
+                        <td class="p-3.5 text-slate-400 font-mono text-2xs">{{ exp.expense_date.strftime('%d %b %Y') }}</td>
+                        <td class="p-3.5">
+                            <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-3xs font-bold">{{ exp.category }}</span>
+                        </td>
+                        <td class="p-3.5 text-slate-800 font-semibold">{{ exp.description }}</td>
+                        <td class="p-3.5 text-slate-500">{{ exp.vendor_name or '-' }}</td>
+                        <td class="p-3.5 text-right font-mono font-bold text-rose-600">Rp {{ '{:,.0f}'.format(exp.amount).replace(',', '.') }}</td>
+                        {% if is_admin %}
+                        <td class="p-3.5 text-center">
+                            <button @click="deleteExpense({{ exp.id }})" class="p-1 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all" title="Hapus pengeluaran">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="{% if is_admin %}6{% else %}5{% endif %}" class="p-8 text-center text-slate-400 text-xs font-semibold">
+                            Belum ada pengeluaran yang dicatat untuk PO ini.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal 1: Catat Expense Baru -->
+    <div x-show="isExpenseModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-md w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900">Catat Pengeluaran Proyek (HPP)</h3>
+                <button @click="isExpenseModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Kategori Biaya *</label>
+                    <select x-model="newExpense.category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0062ff]">
+                        <option value="Material">Material / Pembelian Barang</option>
+                        <option value="Jasa Bubut">Jasa Bubut / Fabrikasi</option>
+                        <option value="Ongkos Kirim">Ongkos Kirim / Transportasi</option>
+                        <option value="Operasional">Operasional Lapangan</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Deskripsi Pengeluaran *</label>
+                    <input type="text" x-model="newExpense.description" placeholder="misal: Beli Pipa Stainless 304" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff] font-medium" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Nominal Biaya (Rp) *</label>
+                    <input type="number" x-model.number="newExpense.amount" placeholder="misal: 500000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Vendor / Toko (Opsional)</label>
+                    <input type="text" x-model="newExpense.vendor_name" placeholder="misal: Toko Berkah Teknik Glodok" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#0062ff]" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isExpenseModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitExpense()" class="px-6 py-2.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-bold transition-all shadow-xs" :disabled="isSubmittingExpense">
+                    <span x-show="!isSubmittingExpense">Simpan Pengeluaran</span>
+                    <span x-show="isSubmittingExpense">Menyimpan...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Edit Rincian Barang PO -->
+    <div x-show="isEditItemsModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-xl w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900">Perbarui Rincian Barang Kontrak PO</h3>
+                <button @click="isEditItemsModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <div class="flex items-center justify-between">
+                    <label class="text-2xs font-bold uppercase text-slate-500">Daftar Item Barang</label>
+                    <button type="button" @click="addPOItemRow()" class="text-2xs font-bold text-[#0062ff] hover:underline">+ Tambah Baris</button>
+                </div>
+
+                <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    <template x-for="(it, idx) in poItemsList" :key="idx">
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center gap-2">
+                            <span class="text-2xs font-mono font-bold text-slate-400 w-4 text-center" x-text="idx + 1"></span>
+                            <input type="text" x-model="it.description" placeholder="Nama barang" class="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-800 font-semibold" required />
+                            <div class="flex items-center gap-1">
+                                <span class="text-3xs text-slate-400 font-mono">Qty:</span>
+                                <input type="number" x-model.number="it.qty" class="w-12 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-xs text-center font-mono font-bold" />
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <span class="text-3xs text-slate-400 font-mono">@</span>
+                                <input type="number" x-model.number="it.price" class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold text-right" />
+                            </div>
+                            <button type="button" @click="removePOItemRow(idx)" class="text-slate-400 hover:text-rose-500 p-1" :disabled="poItemsList.length <= 1">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isEditItemsModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="savePOItems()" class="px-6 py-2.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-bold transition-all shadow-xs" :disabled="isSubmittingItems">
+                    <span x-show="!isSubmittingItems">Simpan Perubahan</span>
+                    <span x-show="isSubmittingItems">Menyimpan...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Edit Persentase Bagi Hasil -->
+    <div x-show="isSplitModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" x-cloak>
+        <div class="bg-white rounded-3xl border border-slate-100 max-w-md w-full p-5 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900">Ubah Porsi Bagi Hasil Proyek Ini</h3>
+                <button @click="isSplitModalOpen = false" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Persentase Karyawan 1 (%)</label>
+                    <input type="number" step="0.1" x-model.number="splitForm.karyawan_1_percent" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Persentase Karyawan 2 (%)</label>
+                    <input type="number" step="0.1" x-model.number="splitForm.karyawan_2_percent" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+                <div>
+                    <label class="block text-2xs font-bold uppercase text-slate-500 mb-1">Persentase Kas Perusahaan PT ADT (%)</label>
+                    <input type="number" step="0.1" x-model.number="splitForm.kas_perusahaan_percent" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#0062ff]" required />
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-2xs flex justify-between font-bold" :class="totalPercentage() === 100 ? 'text-emerald-600' : 'text-rose-600'">
+                    <span>Total Persentase:</span>
+                    <span class="font-mono" x-text="totalPercentage() + '%'"></span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button type="button" @click="isSplitModalOpen = false" class="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+                <button type="button" @click="submitSplit()" class="px-6 py-2.5 bg-[#0062ff] hover:bg-[#0052e0] text-white rounded-full text-xs font-bold transition-all shadow-xs" :disabled="isSubmittingSplit || totalPercentage() !== 100">
+                    <span x-show="!isSubmittingSplit">Simpan Persentase</span>
+                    <span x-show="isSubmittingSplit">Menyimpan...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function poDetailApp() {
+        return {
+            poId: {{ po.id }},
+            status: '{{ po.status }}',
+            isExpenseModalOpen: false,
+            isSubmittingExpense: false,
+            isEditItemsModalOpen: false,
+            isSubmittingItems: false,
+            poItemsList: [],
+            newExpense: {
+                po_id: {{ po.id }},
+                category: 'Material',
+                description: '',
+                amount: 0,
+                vendor_name: ''
+            },
+            isSplitModalOpen: false,
+            isSubmittingSplit: false,
+            splitForm: {
+                karyawan_1_name: '{{ po.profit_split.karyawan_1_name if po.profit_split else "Karyawan 1" }}',
+                karyawan_1_percent: {{ po.profit_split.karyawan_1_percent if po.profit_split else 25.0 }},
+                karyawan_2_name: '{{ po.profit_split.karyawan_2_name if po.profit_split else "Karyawan 2" }}',
+                karyawan_2_percent: {{ po.profit_split.karyawan_2_percent if po.profit_split else 25.0 }},
+                kas_perusahaan_percent: {{ po.profit_split.kas_perusahaan_percent if po.profit_split else 50.0 }}
+            },
+            initData() {
+                const existingItems = {{ po.items | tojson if po.items else '[]' }};
+                if (existingItems && existingItems.length > 0) {
+                    this.poItemsList = existingItems.map(it => ({
+                        description: it.description || '',
+                        qty: it.qty || 1,
+                        price: it.price || 0
+                    }));
+                } else {
+                    this.poItemsList = [{ description: {{ po.item_summary | tojson }}, qty: 1, price: {{ po.total_po_amount }} }];
+                }
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 50);
+            },
+            openEditItemsModal() {
+                this.isEditItemsModalOpen = true;
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            addPOItemRow() {
+                this.poItemsList.push({ description: '', qty: 1, price: 0 });
+                setTimeout(() => { if (window.lucide) lucide.createIcons(); });
+            },
+            removePOItemRow(idx) {
+                if (this.poItemsList.length > 1) {
+                    this.poItemsList.splice(idx, 1);
+                }
+            },
+            async savePOItems() {
+                this.isSubmittingItems = true;
+                try {
+                    const res = await fetch('/api/po/' + this.poId + '/update-items', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: this.poItemsList })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Gagal menyimpan barang');
+                    }
+                    window.location.reload();
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmittingItems = false;
+                }
+            },
+            async updateStatus() {
+                try {
+                    const res = await fetch('/api/po/' + this.poId + '/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            po_number: '{{ po.po_number }}',
+                            client_name: '{{ po.client_name }}',
+                            total_po_amount: {{ po.total_po_amount }},
+                            status: this.status
+                        })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Gagal update status');
+                    }
+                    window.location.reload();
+                } catch (e) {
+                    alert('Gagal update status: ' + e.message);
+                }
+            },
+            openExpenseModal() {
+                this.newExpense = { po_id: this.poId, category: 'Material', description: '', amount: null, vendor_name: '' };
+                this.isExpenseModalOpen = true;
+            },
+            async submitExpense() {
+                if (!this.newExpense.description || this.newExpense.amount <= 0) {
+                    alert('Deskripsi dan nominal harus diisi dengan benar');
+                    return;
+                }
+                this.isSubmittingExpense = true;
+                try {
+                    const res = await fetch('/api/expenses/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.newExpense)
+                    });
+                    if (!res.ok) {
+                        let msg = 'Gagal menyimpan pengeluaran';
+                        try {
+                            const err = await res.json();
+                            msg = err.detail || msg;
+                        } catch {
+                            msg = await res.text();
+                        }
+                        throw new Error(msg);
+                    }
+                    window.location.reload();
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmittingExpense = false;
+                }
+            },
+            async deleteExpense(expId) {
+                if (!confirm('Yakin ingin menghapus pengeluaran ini?')) return;
+                try {
+                    const res = await fetch('/api/expenses/' + expId, { method: 'DELETE' });
+                    if (!res.ok) {
+                        let msg = 'Gagal menghapus pengeluaran';
+                        try {
+                            const err = await res.json();
+                            msg = err.detail || msg;
+                        } catch {
+                            msg = await res.text();
+                        }
+                        throw new Error(msg);
+                    }
+                    window.location.reload();
+                } catch (e) {
+                    alert(e.message);
+                }
+            },
+            openSplitModal() {
+                this.isSplitModalOpen = true;
+            },
+            totalPercentage() {
+                return Number((this.splitForm.karyawan_1_percent + this.splitForm.karyawan_2_percent + this.splitForm.kas_perusahaan_percent).toFixed(1));
+            },
+            async submitSplit() {
+                if (this.totalPercentage() !== 100) {
+                    alert('Total persentase harus tepat 100%');
+                    return;
+                }
+                this.isSubmittingSplit = true;
+                try {
+                    const res = await fetch('/api/po/' + this.poId + '/profit-split', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.splitForm)
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Gagal mengubah bagi hasil');
+                    }
+                    window.location.reload();
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSubmittingSplit = false;
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}
